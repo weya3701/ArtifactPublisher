@@ -1,0 +1,29 @@
+package:
+  path: {{ path }}
+  format: {{ format }}
+  publish_driver: {{ dirver }}
+  recursive: true
+
+repository_profile: {{ profile }}
+
+repositories:
+  internal-npm:
+    provider: {{ provider }}
+    organization: {{ org }}
+    project: {{ project }}
+    feed: {{ repository }}
+    credential_ref: {{ credential }}
+
+options:
+  existing_package_policy: SKIP_IDENTICAL
+  timeout: 5m
+  retry_count: 2
+  dry_run: false
+  parallelism: 10
+  fail_fast: false
+
+metadata:
+  pipeline_id: ""
+  build_id: ""
+  commit_sha: ""
+  correlation_id: ""
