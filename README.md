@@ -377,3 +377,7 @@ go build ./...
 - 尚未支援跨執行 Resume、Promotion History 與 persistent audit sink。
 - 尚未封裝為 ADO Pipeline Task 或 container image。
 - 尚未對真實 ADO Feed 執行自動化 end-to-end test；目前 ADO 行為由 HTTP contract tests 驗證。
+
+## License
+
+本專案採用 [MIT License](LICENSE)，Copyright (c) 2026 Jonas Yang。
