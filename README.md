@@ -85,6 +85,8 @@ metadata:
 
 `repository_profile` 必須與 `repositories` 下的 key 完全一致。Project-scoped Feed 必須填寫 `project`；organization-scoped Feed 可使用空字串。
 
+若設定 `repository_profile: test`，程式會進入離線推送模擬模式。此模式不需要設定 `repositories.test` 或 PAT，不會連線 Artifact Feed，也不會執行 Maven、npm 或 Twine 推送；本地套件可成功解析與驗證時輸出 `SUCCESS`，否則輸出 `FAILED`。批次模式會逐項列出結果並彙總成功與失敗數量。
+
 設定 PAT 並執行：
 
 ```bash
@@ -368,15 +370,6 @@ go build ./...
 - PAT 不出現在 Maven/npm/Twine 命令參數。
 - Retry、conflict、dry-run 與發佈後驗證。
 - Batch bounded parallelism、順序、fail-fast 與 worker 初始化失敗。
-
-## 目前限制與下一步
-
-- Repository provider 僅支援 Azure DevOps Artifacts。
-- 尚未整合 compliance evidence 或 scanner decision。
-- Retry 尚未加入 exponential backoff 與錯誤分類。
-- 尚未支援跨執行 Resume、Promotion History 與 persistent audit sink。
-- 尚未封裝為 ADO Pipeline Task 或 container image。
-- 尚未對真實 ADO Feed 執行自動化 end-to-end test；目前 ADO 行為由 HTTP contract tests 驗證。
 
 ## License
 

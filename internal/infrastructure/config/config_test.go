@@ -122,3 +122,13 @@ func TestValidateReportsAvailableRepositoryProfiles(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+func TestValidateAcceptsTestRepositoryProfileWithoutRepository(t *testing.T) {
+	configValue := config.Config{
+		Package:           config.PackageConfig{Path: "packages", Format: "npm", PublishDriver: "npm_cli"},
+		RepositoryProfile: config.TestRepositoryProfile,
+	}
+	if err := configValue.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}

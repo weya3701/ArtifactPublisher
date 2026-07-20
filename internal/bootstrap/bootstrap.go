@@ -28,11 +28,6 @@ type Components struct {
 }
 
 func Build(c config.Config, secrets SecretResolver) (Components, error) {
-	profile := c.Repositories[c.RepositoryProfile]
-	pat, err := secrets.Resolve(profile.CredentialRef)
-	if err != nil {
-		return Components{}, err
-	}
 	var handler packagehandler.Handler
 	if c.Package.Format == string(model.FormatMaven) {
 		handler = mavenhandler.Handler{Fallback: mavenhandler.Coordinates{
@@ -58,18 +53,30 @@ func Build(c config.Config, secrets SecretResolver) (Components, error) {
 	if handler == nil || publishDriver == nil {
 		return Components{}, fmt.Errorf("unsupported package handler or publish driver")
 	}
+	options, err := c.PublishOptions()
+	if err != nil {
+		return Components{}, err
+	}
+	request := model.PublishRequest{PackagePath: c.Package.Path, Options: options, Metadata: c.Metadata}
+	if c.RepositoryProfile == config.TestRepositoryProfile {
+		return Components{
+			Service: publisher.Service{Handler: handler, Simulation: true},
+			Request: request,
+		}, nil
+	}
+	profile := c.Repositories[c.RepositoryProfile]
+	pat, err := secrets.Resolve(profile.CredentialRef)
+	if err != nil {
+		return Components{}, err
+	}
 	repository := ado.New(ado.Config{
 		Organization: profile.Organization,
 		Project:      profile.Project,
 		Feed:         profile.Feed,
 		Credential:   credential.PersonalAccessToken{Token: pat},
 	})
-	options, err := c.PublishOptions()
-	if err != nil {
-		return Components{}, err
-	}
 	return Components{
 		Service: publisher.Service{Handler: handler, Repository: repository, Driver: publishDriver},
-		Request: model.PublishRequest{PackagePath: c.Package.Path, Options: options, Metadata: c.Metadata},
+		Request: request,
 	}, nil
 }
