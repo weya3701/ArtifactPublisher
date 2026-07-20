@@ -35,6 +35,7 @@ type Service struct {
 	Handler    packagehandler.Handler
 	Repository artifactrepository.ArtifactRepository
 	Driver     driver.PublishDriver
+	Simulation bool
 	Now        func() time.Time
 }
 
@@ -53,7 +54,7 @@ func (s Service) Publish(ctx context.Context, request model.PublishRequest) (mod
 		}
 		return result, nil
 	}
-	if s.Handler == nil || s.Repository == nil || s.Driver == nil {
+	if s.Handler == nil || (!s.Simulation && (s.Repository == nil || s.Driver == nil)) {
 		return finish(ErrorConfiguration, fmt.Errorf("publisher service dependencies are required"))
 	}
 	if request.PackagePath == "" {
@@ -68,6 +69,12 @@ func (s Service) Publish(ctx context.Context, request model.PublishRequest) (mod
 		return finish(ErrorPackage, err)
 	}
 	result.Package = descriptor
+	if s.Simulation {
+		result.RepositoryProvider = "simulation"
+		result.RepositoryName = "test"
+		result.Status = model.StatusSuccess
+		return finish("", nil)
+	}
 	if err := s.Repository.ValidateConfig(); err != nil {
 		return finish(ErrorConfiguration, err)
 	}

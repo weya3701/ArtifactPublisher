@@ -119,6 +119,18 @@ func TestDryRunHasNoPublishSideEffect(t *testing.T) {
 	}
 }
 
+func TestSimulationReturnsSuccessWithoutRepositoryOrPublishSideEffect(t *testing.T) {
+	descriptor := model.PackageDescriptor{Format: model.FormatNPM, Name: "demo", Version: "1.0.0", SHA256: "local"}
+	service := publisher.Service{Handler: handlerFake{descriptor}, Simulation: true}
+	result, err := service.Publish(context.Background(), model.PublishRequest{PackagePath: "/artifacts/demo"})
+	if err != nil || result.Status != model.StatusSuccess {
+		t.Fatalf("result=%+v error=%v", result, err)
+	}
+	if result.RepositoryProvider != "simulation" || result.RepositoryName != "test" {
+		t.Fatalf("unexpected simulation repository: %+v", result)
+	}
+}
+
 func TestAmbiguousPublishFailureIsNotRetriedWhenRemoteChecksumMatches(t *testing.T) {
 	descriptor := descriptorFixture()
 	repository := &repositoryFake{metadata: []model.RemotePackage{

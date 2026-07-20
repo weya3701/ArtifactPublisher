@@ -12,6 +12,8 @@ import (
 	"packagespublisher/internal/model"
 )
 
+const TestRepositoryProfile = "test"
+
 type PackageConfig struct {
 	Path          string             `yaml:"path"`
 	Format        string             `yaml:"format"`
@@ -98,6 +100,9 @@ func (c Config) Validate() error {
 	if fallbackFields != 0 && fallbackFields != 3 {
 		return fmt.Errorf("package.maven group_id, artifact_id and version must be configured together")
 	}
+	if c.RepositoryProfile == TestRepositoryProfile {
+		return c.validateOptions()
+	}
 	profile, ok := c.Repositories[c.RepositoryProfile]
 	if c.RepositoryProfile == "" || !ok {
 		available := make([]string, 0, len(c.Repositories))
@@ -113,6 +118,10 @@ func (c Config) Validate() error {
 	if profile.Organization == "" || profile.Feed == "" || profile.CredentialRef == "" {
 		return fmt.Errorf("ADO repository requires organization, feed and credential_ref")
 	}
+	return c.validateOptions()
+}
+
+func (c Config) validateOptions() error {
 	switch c.Options.ExistingPackagePolicy {
 	case "", model.PolicySkipIdentical, model.PolicyFailConflict, model.PolicyAlwaysFail:
 	default:
