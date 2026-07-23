@@ -3,8 +3,7 @@ package bootstrap
 import (
 	"fmt"
 
-	"packagespublisher/internal/artifact_repository/adapters/ado"
-	"packagespublisher/internal/artifact_repository/credential"
+	repositoryfactory "packagespublisher/internal/artifact_repository/factory"
 	"packagespublisher/internal/infrastructure/config"
 	"packagespublisher/internal/model"
 	packagehandler "packagespublisher/internal/package"
@@ -64,17 +63,10 @@ func Build(c config.Config, secrets SecretResolver) (Components, error) {
 			Request: request,
 		}, nil
 	}
-	profile := c.Repositories[c.RepositoryProfile]
-	pat, err := secrets.Resolve(profile.CredentialRef)
+	repository, err := repositoryfactory.New(c.Repositories[c.RepositoryProfile], secrets)
 	if err != nil {
 		return Components{}, err
 	}
-	repository := ado.New(ado.Config{
-		Organization: profile.Organization,
-		Project:      profile.Project,
-		Feed:         profile.Feed,
-		Credential:   credential.PersonalAccessToken{Token: pat},
-	})
 	return Components{
 		Service: publisher.Service{Handler: handler, Repository: repository, Driver: publishDriver},
 		Request: request,

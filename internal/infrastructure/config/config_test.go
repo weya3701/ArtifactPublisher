@@ -108,6 +108,36 @@ func TestValidateAcceptsPyPITwine(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsNexus(t *testing.T) {
+	configValue := config.Config{
+		Package:           config.PackageConfig{Path: "packages", Format: "npm", PublishDriver: "npm_cli"},
+		RepositoryProfile: "nexus-hosted",
+		Repositories: map[string]config.RepositoryConfig{
+			"nexus-hosted": {
+				Provider: "nexus", BaseURL: "https://nexus.example.com", Repository: "npm-hosted",
+				Username: "publisher", CredentialRef: "NEXUS_PASSWORD",
+			},
+		},
+	}
+	if err := configValue.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateRejectsIncompleteNexus(t *testing.T) {
+	configValue := config.Config{
+		Package:           config.PackageConfig{Path: "packages", Format: "npm", PublishDriver: "npm_cli"},
+		RepositoryProfile: "nexus-hosted",
+		Repositories: map[string]config.RepositoryConfig{
+			"nexus-hosted": {Provider: "nexus", BaseURL: "https://nexus.example.com"},
+		},
+	}
+	err := configValue.Validate()
+	if err == nil || !strings.Contains(err.Error(), "base_url, repository, username and credential_ref") {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestValidateReportsAvailableRepositoryProfiles(t *testing.T) {
 	configValue := config.Config{
 		Package:           config.PackageConfig{Path: "packages", Format: "npm", PublishDriver: "npm_cli"},

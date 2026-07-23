@@ -1,7 +1,7 @@
 package:
   path: {{ path }}
   format: {{ format }}
-  publish_driver: {{ dirver }}
+  publish_driver: {{ driver }}
   recursive: true
 
 repository_profile: {{ profile }}
@@ -13,6 +13,14 @@ repositories:
     project: {{ project }}
     feed: {{ repository }}
     credential_ref: {{ credential }}
+
+  # Nexus profile example (use a format-compatible hosted repository):
+  # nexus-hosted:
+  #   provider: nexus
+  #   base_url: https://nexus.example.com
+  #   repository: maven-hosted
+  #   username: publisher
+  #   credential_ref: NEXUS_PASSWORD
 
 options:
   existing_package_policy: SKIP_IDENTICAL

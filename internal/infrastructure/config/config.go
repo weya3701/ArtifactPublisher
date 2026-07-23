@@ -33,6 +33,9 @@ type RepositoryConfig struct {
 	Organization  string `yaml:"organization"`
 	Project       string `yaml:"project"`
 	Feed          string `yaml:"feed"`
+	BaseURL       string `yaml:"base_url"`
+	Repository    string `yaml:"repository"`
+	Username      string `yaml:"username"`
 	CredentialRef string `yaml:"credential_ref"`
 }
 
@@ -112,11 +115,17 @@ func (c Config) Validate() error {
 		sort.Strings(available)
 		return fmt.Errorf("repository_profile %q does not match a configured repository; available profiles: %s", c.RepositoryProfile, strings.Join(available, ", "))
 	}
-	if profile.Provider != "ado" {
-		return fmt.Errorf("MVP supports repository provider ado only")
-	}
-	if profile.Organization == "" || profile.Feed == "" || profile.CredentialRef == "" {
-		return fmt.Errorf("ADO repository requires organization, feed and credential_ref")
+	switch profile.Provider {
+	case "ado":
+		if profile.Organization == "" || profile.Feed == "" || profile.CredentialRef == "" {
+			return fmt.Errorf("ADO repository requires organization, feed and credential_ref")
+		}
+	case "nexus":
+		if profile.BaseURL == "" || profile.Repository == "" || profile.Username == "" || profile.CredentialRef == "" {
+			return fmt.Errorf("Nexus repository requires base_url, repository, username and credential_ref")
+		}
+	default:
+		return fmt.Errorf("unsupported repository provider %q; supported providers are ado and nexus", profile.Provider)
 	}
 	return c.validateOptions()
 }
