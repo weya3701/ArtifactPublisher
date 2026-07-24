@@ -162,3 +162,28 @@ func TestValidateAcceptsTestRepositoryProfileWithoutRepository(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+func TestValidateAcceptsArchivePathInsteadOfPath(t *testing.T) {
+	configValue := config.Config{
+		Package: config.PackageConfig{
+			ArchivePath: "approved-packages.zip", Format: "npm", PublishDriver: "npm_cli", Recursive: true,
+		},
+		RepositoryProfile: config.TestRepositoryProfile,
+	}
+	if err := configValue.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateRejectsPathAndArchivePathTogether(t *testing.T) {
+	configValue := config.Config{
+		Package: config.PackageConfig{
+			Path: "packages", ArchivePath: "approved-packages.zip", Format: "npm", PublishDriver: "npm_cli",
+		},
+		RepositoryProfile: config.TestRepositoryProfile,
+	}
+	err := configValue.Validate()
+	if err == nil || !strings.Contains(err.Error(), "cannot be configured together") {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}

@@ -16,6 +16,7 @@ const TestRepositoryProfile = "test"
 
 type PackageConfig struct {
 	Path          string             `yaml:"path"`
+	ArchivePath   string             `yaml:"archive_path"`
 	Format        string             `yaml:"format"`
 	PublishDriver string             `yaml:"publish_driver"`
 	Recursive     bool               `yaml:"recursive"`
@@ -72,8 +73,11 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
-	if c.Package.Path == "" {
-		return fmt.Errorf("package.path is required")
+	if c.Package.Path == "" && c.Package.ArchivePath == "" {
+		return fmt.Errorf("one of package.path or package.archive_path is required")
+	}
+	if c.Package.Path != "" && c.Package.ArchivePath != "" {
+		return fmt.Errorf("package.path and package.archive_path cannot be configured together")
 	}
 	switch c.Package.Format {
 	case string(model.FormatMaven):
