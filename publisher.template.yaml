@@ -1,5 +1,7 @@
 package:
   path: {{ path }}
+  # To publish an outer bundle archive, replace path with:
+  # archive_path: ./approved-packages.zip
   format: {{ format }}
   publish_driver: {{ driver }}
   recursive: true

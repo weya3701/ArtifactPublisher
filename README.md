@@ -125,13 +125,34 @@ go build -o package-publisher ./cmd/publisher
 
 | 欄位 | 必要 | 說明 |
 | --- | --- | --- |
-| `path` | 是 | 單一套件檔案、套件目錄或下載 repository root |
+| `path` | 與 `archive_path` 二選一 | 單一套件檔案、套件目錄或下載 repository root |
+| `archive_path` | 與 `path` 二選一 | 外層封裝壓縮檔；支援 `.zip`、`.tar`、`.tar.gz`、`.tgz`，解壓後再探索及發佈 |
 | `format` | 是 | `maven`、`npm`、`pypi` |
 | `publish_driver` | 是 | 必須與 format 對應 |
 | `recursive` | 否 | 遞迴探索並啟用 Batch Publish |
 | `maven.group_id` | 條件式 | JAR 沒有內嵌 Maven metadata 時使用 |
 | `maven.artifact_id` | 條件式 | 必須與另外兩個 Maven fallback 欄位一起設定 |
 | `maven.version` | 條件式 | 必須與另外兩個 Maven fallback 欄位一起設定 |
+
+### 封裝壓縮檔
+
+若掃描或核准流程將多個套件封裝為單一壓縮檔，可使用
+`archive_path` 取代 `path`：
+
+```yaml
+package:
+  archive_path: ./approved-packages.zip
+  format: maven
+  publish_driver: maven_cli
+  recursive: true
+```
+
+Publisher 會將封裝檔解壓至暫存目錄，再沿用既有的套件探索、驗證與
+Batch Publish 流程；執行結束後會移除暫存內容。為避免 Zip Slip 等攻擊，
+壓縮檔內的絕對路徑、上層路徑、符號連結及特殊檔案都會被拒絕。
+
+`archive_path` 表示包住套件的「外層封裝」，不能和 `path` 同時設定。
+npm 的 `.tgz` 或 PyPI 的 `.zip` 若本身就是待發佈套件，仍應使用 `path`。
 
 ### `repositories`
 

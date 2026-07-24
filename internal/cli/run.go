@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"packagespublisher/internal/archive"
 	"packagespublisher/internal/bootstrap"
 	"packagespublisher/internal/infrastructure/config"
 	"packagespublisher/internal/infrastructure/secret"
@@ -40,6 +41,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
 	}
+	cleanup := func() {}
+	if loaded.Package.ArchivePath != "" {
+		loaded.Package.Path, cleanup, err = extractArchive(loaded.Package.ArchivePath)
+		if err != nil {
+			writeFailure(stdout, "PACKAGE", err)
+			return 1
+		}
+		defer cleanup()
+	}
 	batchPaths, batchMode, err := resolveBatchMode(loaded)
 	if err != nil {
 		writeFailure(stdout, "PACKAGE", err)
@@ -65,6 +75,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	return 0
 }
+
+var extractArchive = archive.Extract
 
 func runBatch(ctx context.Context, loaded config.Config, paths []string, stdout io.Writer) int {
 	firstComponents, err := bootstrap.Build(loaded, secret.Environment{})
