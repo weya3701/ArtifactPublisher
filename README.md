@@ -253,7 +253,13 @@ package:
   format: npm
   publish_driver: npm_cli
   recursive: true
+  npm:
+    tag: legacy
 ```
+
+`package.npm.tag` 會以 `npm publish --tag <tag>` 傳入。回補低於遠端
+`latest` 的舊版本時，可設定 `legacy`、`v4` 等非 `latest` dist-tag；
+未設定時仍沿用 npm 的預設 `latest`。
 
 ## PyPI
 

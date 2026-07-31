@@ -41,6 +41,7 @@ type PublishOptions struct {
 	Timeout               time.Duration         `json:"timeout" yaml:"-"`
 	RetryCount            int                   `json:"retryCount" yaml:"retry_count"`
 	DryRun                bool                  `json:"dryRun" yaml:"dry_run"`
+	NPMTag                string                `json:"npmTag,omitempty" yaml:"-"`
 }
 
 type RequestMetadata struct {

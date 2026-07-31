@@ -11,6 +11,7 @@ type Target struct {
 	RepositoryID string
 	Endpoint     string
 	Credential   artifactrepository.Credential
+	NPMTag       string
 }
 
 type PublishDriver interface {

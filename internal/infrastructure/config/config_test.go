@@ -16,8 +16,10 @@ func TestLoadPublisherYAML(t *testing.T) {
 	data := []byte(`
 package:
   path: ./artifacts
-  format: maven
-  publish_driver: maven_cli
+  format: npm
+  publish_driver: npm_cli
+  npm:
+    tag: legacy
 repository_profile: internal-maven
 repositories:
   internal-maven:
@@ -47,6 +49,9 @@ metadata:
 	}
 	if options.Timeout != 2*time.Minute || options.RetryCount != 3 || !options.DryRun || options.ExistingPackagePolicy != model.PolicySkipIdentical {
 		t.Fatalf("unexpected options: %+v", options)
+	}
+	if options.NPMTag != "legacy" {
+		t.Fatalf("npm tag = %q; want legacy", options.NPMTag)
 	}
 	if loaded.Metadata.CorrelationID != "correlation-1" {
 		t.Fatalf("metadata not parsed: %+v", loaded.Metadata)

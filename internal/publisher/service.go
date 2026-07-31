@@ -119,7 +119,12 @@ func (s Service) Publish(ctx context.Context, request model.PublishRequest) (mod
 		publishCtx, cancel = context.WithTimeout(ctx, request.Options.Timeout)
 	}
 	defer cancel()
-	target := driver.Target{RepositoryID: repositoryContext.RepositoryName, Endpoint: endpoint, Credential: s.Repository.Credential()}
+	target := driver.Target{
+		RepositoryID: repositoryContext.RepositoryName,
+		Endpoint:     endpoint,
+		Credential:   s.Repository.Credential(),
+		NPMTag:       request.Options.NPMTag,
+	}
 	if err := s.publishWithRetry(publishCtx, descriptor, target, request.Options.RetryCount); err != nil {
 		return finish(ErrorPublish, err)
 	}

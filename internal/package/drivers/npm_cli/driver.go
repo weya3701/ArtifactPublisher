@@ -49,7 +49,17 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 	if runner == nil {
 		runner = ExecRunner{}
 	}
-	args := []string{"publish", descriptor.Files[0].Path, "--registry", target.Endpoint, "--userconfig", npmrc, "--ignore-scripts"}
+	args := []string{
+		"publish",
+		descriptor.Files[0].Path,
+		"--registry", target.Endpoint,
+		"--userconfig", npmrc,
+		"--ignore-scripts",
+		"--provenance=false",
+	}
+	if target.NPMTag != "" {
+		args = append(args, "--tag", target.NPMTag)
+	}
 	output, err := runner.Run(ctx, executable, args...)
 	if err != nil {
 		text := strings.ReplaceAll(string(output), target.Credential.Secret(), "[REDACTED]")
@@ -73,7 +83,7 @@ func writeNPMRC(target driver.Target) (string, func(), error) {
 	cleanup := func() { _ = os.RemoveAll(directory) }
 	endpoint := strings.TrimRight(target.Endpoint, "/") + "/"
 	authKey := "//" + parsed.Host + strings.TrimRight(parsed.Path, "/") + "/"
-	content := fmt.Sprintf("registry=%s\nalways-auth=true\n%s:username=%s\n%s:_password=%s\n%s:email=npm@localhost\n",
+	content := fmt.Sprintf("registry=%s\n%s:username=%s\n%s:_password=%s\n%s:email=npm@localhost\n",
 		endpoint, authKey, target.Credential.Username(), authKey,
 		base64.StdEncoding.EncodeToString([]byte(target.Credential.Secret())), authKey)
 	path := filepath.Join(directory, ".npmrc")

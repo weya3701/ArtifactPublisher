@@ -21,12 +21,17 @@ type PackageConfig struct {
 	PublishDriver string             `yaml:"publish_driver"`
 	Recursive     bool               `yaml:"recursive"`
 	Maven         MavenPackageConfig `yaml:"maven"`
+	NPM           NPMPackageConfig   `yaml:"npm"`
 }
 
 type MavenPackageConfig struct {
 	GroupID    string `yaml:"group_id"`
 	ArtifactID string `yaml:"artifact_id"`
 	Version    string `yaml:"version"`
+}
+
+type NPMPackageConfig struct {
+	Tag string `yaml:"tag"`
 }
 
 type RepositoryConfig struct {
@@ -107,6 +112,12 @@ func (c Config) Validate() error {
 	if fallbackFields != 0 && fallbackFields != 3 {
 		return fmt.Errorf("package.maven group_id, artifact_id and version must be configured together")
 	}
+	if c.Package.Format != string(model.FormatNPM) && c.Package.NPM.Tag != "" {
+		return fmt.Errorf("package.npm.tag is valid for npm packages only")
+	}
+	if strings.TrimSpace(c.Package.NPM.Tag) != c.Package.NPM.Tag {
+		return fmt.Errorf("package.npm.tag cannot contain leading or trailing whitespace")
+	}
 	if c.RepositoryProfile == TestRepositoryProfile {
 		return c.validateOptions()
 	}
@@ -166,5 +177,6 @@ func (c Config) PublishOptions() (model.PublishOptions, error) {
 	return model.PublishOptions{
 		ExistingPackagePolicy: c.Options.ExistingPackagePolicy,
 		Timeout:               timeout, RetryCount: c.Options.RetryCount, DryRun: c.Options.DryRun,
+		NPMTag: c.Package.NPM.Tag,
 	}, nil
 }
