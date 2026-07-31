@@ -4,6 +4,8 @@ Package Publisher 是一個以 Go 實作的套件入庫工具，負責將已下�
 
 目前支援 Maven、npm 與 PyPI，提供單套件及大量套件批次處理、內容衝突保護、SHA-256 驗證、重試、dry-run 與結構化 JSON 報告。
 
+完整的安裝、操作步驟，以及 Maven、npm、PyPI 搭配 ADO、Nexus 的設定檔範例，請參閱[使用者操作手冊](docs/user-manual.zh-TW.md)。
+
 > 目前定位是 Promotion／Publisher。
 
 ## 支援矩陣
