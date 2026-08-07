@@ -140,11 +140,11 @@ func (h Handler) resolveTarball(ctx context.Context, path string) (string, error
 }
 
 func (p ExecPacker) Pack(ctx context.Context, directory string) (string, error) {
-	executable := p.Executable
-	if executable == "" {
-		executable = "npm"
+	command, packDirectory, err := p.command(ctx, directory)
+	if err != nil {
+		return "", err
 	}
-	output, err := exec.CommandContext(ctx, executable, "pack", directory, "--json", "--ignore-scripts", "--pack-destination", directory).CombinedOutput()
+	output, err := command.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("npm pack failed: %w (output: %s)", err, string(output))
 	}
@@ -156,9 +156,22 @@ func (p ExecPacker) Pack(ctx context.Context, directory string) (string, error) 
 	}
 	path := packed[0].Filename
 	if !filepath.IsAbs(path) {
-		path = filepath.Join(directory, path)
+		path = filepath.Join(packDirectory, path)
 	}
 	return path, nil
+}
+
+func (p ExecPacker) command(ctx context.Context, directory string) (*exec.Cmd, string, error) {
+	executable := p.Executable
+	if executable == "" {
+		executable = "npm"
+	}
+	packDirectory, err := filepath.Abs(directory)
+	if err != nil {
+		return nil, "", fmt.Errorf("resolve npm package directory %q: %w", directory, err)
+	}
+	command := exec.CommandContext(ctx, executable, "pack", packDirectory, "--json", "--ignore-scripts", "--pack-destination", packDirectory)
+	return command, packDirectory, nil
 }
 
 func readPackageJSON(tarball string) (packageJSON, error) {
