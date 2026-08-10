@@ -127,6 +127,14 @@ go build -o package-publisher ./cmd/publisher
 ./package-publisher publish --config publisher.yaml
 ```
 
+需要在命令列查看設定載入、套件探索及逐項發佈狀態時，加入 `--verbose`：
+
+```bash
+./package-publisher publish --config publisher.yaml --verbose
+```
+
+進度訊息會寫入 `stderr`，最終 JSON 仍單獨寫入 `stdout`，因此可安全地將 JSON 導向檔案。`--verbose` 亦可與 `--mode=test` 同時使用。
+
 ## 設定說明
 
 ### `package`

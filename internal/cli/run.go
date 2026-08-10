@@ -23,13 +23,14 @@ import (
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "publish" {
-		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test]")
+		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test] [--verbose]")
 		return 2
 	}
 	flags := flag.NewFlagSet("publish", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "path to publisher YAML configuration")
 	modeValue := flags.String("mode", "", "publish mode (test for offline simulation)")
+	verbose := flags.Bool("verbose", false, "show publish progress on stderr")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -42,34 +43,46 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "unsupported --mode %q; supported mode is test\n", *modeValue)
 		return 2
 	}
+	progress := newProgressReporter(*verbose, stderr)
+	progress.Printf("loading configuration: %s", *configPath)
 	loaded, err := config.LoadForMode(*configPath, mode)
 	if err != nil {
+		progress.Printf("configuration failed: %v", err)
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
 	}
+	progress.Printf("configuration loaded: format=%s mode=%s", loaded.Package.Format, displayMode(mode))
 	cleanup := func() {}
 	if loaded.Package.ArchivePath != "" {
+		progress.Printf("extracting archive: %s", loaded.Package.ArchivePath)
 		loaded.Package.Path, cleanup, err = extractArchive(loaded.Package.ArchivePath)
 		if err != nil {
+			progress.Printf("archive extraction failed: %v", err)
 			writeFailure(stdout, "PACKAGE", err)
 			return 1
 		}
 		defer cleanup()
+		progress.Printf("archive extracted: %s", loaded.Package.Path)
 	}
+	progress.Printf("inspecting package input: %s", loaded.Package.Path)
 	batchPaths, batchMode, err := resolveBatchMode(loaded)
 	if err != nil {
+		progress.Printf("package discovery failed: %v", err)
 		writeFailure(stdout, "PACKAGE", err)
 		return 1
 	}
 	if batchMode {
-		return runBatch(ctx, loaded, batchPaths, mode, stdout)
+		progress.Printf("discovered %d package(s); using batch publish", len(batchPaths))
+		return runBatch(ctx, loaded, batchPaths, mode, stdout, progress)
 	}
+	progress.Printf("using single-package publish")
 	components, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 	if err != nil {
+		progress.Printf("publisher initialization failed: %v", err)
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
 	}
-	result, publishErr := components.Service.Publish(ctx, components.Request)
+	result, publishErr := withProgress(components.Service, progress).Publish(ctx, components.Request)
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(result); err != nil {
@@ -84,14 +97,24 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 var extractArchive = archive.Extract
 
-func runBatch(ctx context.Context, loaded config.Config, paths []string, mode config.PublishMode, stdout io.Writer) int {
+func runBatch(ctx context.Context, loaded config.Config, paths []string, mode config.PublishMode, stdout io.Writer, progress *progressReporter) int {
+	parallelism := loaded.Options.Parallelism
+	if parallelism <= 0 {
+		parallelism = publisher.DefaultParallelism()
+	}
+	if parallelism > len(paths) {
+		parallelism = len(paths)
+	}
+	progress.Printf("initializing batch publisher: total=%d parallelism=%d", len(paths), parallelism)
 	firstComponents, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 	if err != nil {
+		progress.Printf("batch publisher initialization failed: %v", err)
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
 	}
 	options, err := loaded.PublishOptions()
 	if err != nil {
+		progress.Printf("publish options are invalid: %v", err)
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
 	}
@@ -107,16 +130,17 @@ func runBatch(ctx context.Context, loaded config.Config, paths []string, mode co
 			if firstAvailable {
 				firstAvailable = false
 				service := firstComponents.Service
-				return service, nil
+				return withProgress(service, progress), nil
 			}
 			components, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 			if err != nil {
 				return nil, err
 			}
-			return components.Service, nil
+			return withProgress(components.Service, progress), nil
 		},
 	}
 	report, publishErr := batch.Publish(ctx, requests)
+	progress.Printf("batch finished: status=%s succeeded=%d skipped=%d failed=%d", report.Status, report.Succeeded, report.Skipped, report.Failed)
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(report); err != nil {

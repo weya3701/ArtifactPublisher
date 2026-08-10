@@ -37,13 +37,26 @@ go build -o package-publisher ./cmd/publisher
 若畫面顯示以下用法，表示執行檔可正常啟動：
 
 ```text
-usage: package-publisher publish --config publisher.yaml [--mode=test]
+usage: package-publisher publish --config publisher.yaml [--mode=test] [--verbose]
 ```
 
 也可以不先建置，直接使用：
 
 ```bash
 go run ./cmd/publisher publish --config publisher.yaml
+```
+
+加入 `--verbose` 可在命令列查看設定載入、套件探索、單筆或批次發佈進度：
+
+```bash
+./package-publisher publish --config publisher.yaml --verbose
+```
+
+進度訊息會寫入 `stderr`，發佈結果 JSON 仍寫入 `stdout`。若要分別保存兩者，可執行：
+
+```bash
+./package-publisher publish --config publisher.yaml --verbose \
+  > publish-result.json 2> publish-progress.log
 ```
 
 ### 2.2 安裝各格式所需工具
