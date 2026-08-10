@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +19,8 @@ const (
 	PublishModeDefault PublishMode = ""
 	PublishModeTest    PublishMode = "test"
 )
+
+var environmentReference = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 type PackageConfig struct {
 	Path          string             `yaml:"path"`
@@ -80,10 +83,46 @@ func LoadForMode(path string, mode PublishMode) (Config, error) {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("parse YAML config: %w", err)
 	}
+	if err := config.expandPackageEnvironment(); err != nil {
+		return Config{}, err
+	}
 	if err := config.ValidateForMode(mode); err != nil {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+func (c *Config) expandPackageEnvironment() error {
+	var err error
+	c.Package.Path, err = expandEnvironmentReferences(c.Package.Path, "package.path")
+	if err != nil {
+		return err
+	}
+	c.Package.ArchivePath, err = expandEnvironmentReferences(c.Package.ArchivePath, "package.archive_path")
+	return err
+}
+
+func expandEnvironmentReferences(value, field string) (string, error) {
+	if value == "" || !strings.Contains(value, "${") {
+		return value, nil
+	}
+	withoutValidReferences := environmentReference.ReplaceAllString(value, "")
+	if strings.Contains(withoutValidReferences, "${") {
+		return "", fmt.Errorf("%s contains an invalid environment variable reference", field)
+	}
+	var expansionErr error
+	expanded := environmentReference.ReplaceAllStringFunc(value, func(reference string) string {
+		name := reference[2 : len(reference)-1]
+		replacement, ok := os.LookupEnv(name)
+		if (!ok || replacement == "") && expansionErr == nil {
+			expansionErr = fmt.Errorf("%s environment variable %q is not set or empty", field, name)
+		}
+		return replacement
+	})
+	if expansionErr != nil {
+		return "", expansionErr
+	}
+	return expanded, nil
 }
 
 func (c Config) Validate() error {

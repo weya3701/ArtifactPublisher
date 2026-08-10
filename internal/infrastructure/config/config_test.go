@@ -58,6 +58,88 @@ metadata:
 	}
 }
 
+func TestLoadExpandsPackagePathEnvironmentVariable(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PACKAGE_ROOT", root)
+	path := filepath.Join(t.TempDir(), "publisher.yaml")
+	data := []byte(`
+package:
+  path: "${PACKAGE_ROOT}/node_modules"
+  format: npm
+  publish_driver: npm_cli
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.LoadForMode(path, config.PublishModeTest)
+	if err != nil {
+		t.Fatalf("LoadForMode() error = %v", err)
+	}
+	want := filepath.Join(root, "node_modules")
+	if loaded.Package.Path != want {
+		t.Fatalf("package.path = %q, want %q", loaded.Package.Path, want)
+	}
+}
+
+func TestLoadExpandsPackageArchivePathEnvironmentVariable(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PACKAGE_ROOT", root)
+	path := filepath.Join(t.TempDir(), "publisher.yaml")
+	data := []byte(`
+package:
+  archive_path: "${PACKAGE_ROOT}/approved-packages.zip"
+  format: npm
+  publish_driver: npm_cli
+  recursive: true
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.LoadForMode(path, config.PublishModeTest)
+	if err != nil {
+		t.Fatalf("LoadForMode() error = %v", err)
+	}
+	want := filepath.Join(root, "approved-packages.zip")
+	if loaded.Package.ArchivePath != want {
+		t.Fatalf("package.archive_path = %q, want %q", loaded.Package.ArchivePath, want)
+	}
+}
+
+func TestLoadRejectsMissingPackagePathEnvironmentVariable(t *testing.T) {
+	t.Setenv("PACKAGE_ROOT", "")
+	path := filepath.Join(t.TempDir(), "publisher.yaml")
+	data := []byte(`
+package:
+  path: "${PACKAGE_ROOT}/node_modules"
+  format: npm
+  publish_driver: npm_cli
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.LoadForMode(path, config.PublishModeTest)
+	if err == nil || !strings.Contains(err.Error(), `package.path environment variable "PACKAGE_ROOT" is not set or empty`) {
+		t.Fatalf("LoadForMode() error = %v", err)
+	}
+}
+
+func TestLoadRejectsInvalidPackagePathEnvironmentReference(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "publisher.yaml")
+	data := []byte(`
+package:
+  path: "${PACKAGE-ROOT}/node_modules"
+  format: npm
+  publish_driver: npm_cli
+`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.LoadForMode(path, config.PublishModeTest)
+	if err == nil || !strings.Contains(err.Error(), "package.path contains an invalid environment variable reference") {
+		t.Fatalf("LoadForMode() error = %v", err)
+	}
+}
+
 func TestLoadRejectsLiteralCredentialInsteadOfReference(t *testing.T) {
 	configValue := config.Config{
 		Package:           config.PackageConfig{Path: ".", Format: "maven", PublishDriver: "maven_cli"},

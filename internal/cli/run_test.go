@@ -18,14 +18,15 @@ import (
 
 func TestRunTestModePublishesWithoutRepositoryConfiguration(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("PACKAGE_ROOT", root)
 	packagePath := filepath.Join(root, "demo-1.0.0.tgz")
 	createNPMTarball(t, packagePath, `{"name":"demo","version":"1.0.0"}`)
 	configPath := filepath.Join(root, "publisher.yaml")
-	configData := fmt.Sprintf(`package:
-  path: %q
+	configData := `package:
+  path: "${PACKAGE_ROOT}/demo-1.0.0.tgz"
   format: npm
   publish_driver: npm_cli
-`, packagePath)
+`
 	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
 		t.Fatal(err)
 	}

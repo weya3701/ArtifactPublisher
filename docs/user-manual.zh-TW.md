@@ -157,6 +157,22 @@ metadata:
 
 `path` 與 `archive_path` 不可同時出現。路徑可為相對於執行時工作目錄的相對路徑，也可使用絕對路徑。
 
+兩個路徑欄位皆支援 `${VAR}` 環境變數：
+
+```bash
+export PACKAGE_ROOT="$(pwd)"
+```
+
+```yaml
+package:
+  path: "${PACKAGE_ROOT}/node_modules"
+  format: npm
+  publish_driver: npm_cli
+  recursive: true
+```
+
+環境變數未設定、名稱格式錯誤或值為空時，Publisher 會回報 configuration error。建議使用絕對路徑，尤其是 npm package directory 或 `node_modules`。`credential_ref` 不使用 `${VAR}`，仍應直接填入保存 credential 的環境變數名稱。
+
 ### 4.2 `repository_profile` 與 `repositories`
 
 `repository_profile` 是本次使用的 profile 名稱，必須與 `repositories` 下方的 key 完全相同：

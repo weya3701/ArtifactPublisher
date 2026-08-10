@@ -150,6 +150,22 @@ go build -o package-publisher ./cmd/publisher
 | `maven.artifact_id` | 條件式 | 必須與另外兩個 Maven fallback 欄位一起設定 |
 | `maven.version` | 條件式 | 必須與另外兩個 Maven fallback 欄位一起設定 |
 
+`path` 與 `archive_path` 支援 `${VAR}` 環境變數。例如：
+
+```bash
+export PACKAGE_ROOT="$(pwd)"
+```
+
+```yaml
+package:
+  path: "${PACKAGE_ROOT}/node_modules"
+  format: npm
+  publish_driver: npm_cli
+  recursive: true
+```
+
+環境變數必須已設定且不可為空；建議 `PACKAGE_ROOT` 使用絕對路徑。此功能不會展開 `credential_ref`，PAT 與密碼仍只填環境變數名稱。
+
 ### 封裝壓縮檔
 
 若掃描或核准流程將多個套件封裝為單一壓縮檔，可使用
