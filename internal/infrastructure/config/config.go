@@ -12,7 +12,12 @@ import (
 	"packagespublisher/internal/model"
 )
 
-const TestRepositoryProfile = "test"
+type PublishMode string
+
+const (
+	PublishModeDefault PublishMode = ""
+	PublishModeTest    PublishMode = "test"
+)
 
 type PackageConfig struct {
 	Path          string             `yaml:"path"`
@@ -63,6 +68,10 @@ type Config struct {
 }
 
 func Load(path string) (Config, error) {
+	return LoadForMode(path, PublishModeDefault)
+}
+
+func LoadForMode(path string, mode PublishMode) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
@@ -71,13 +80,20 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("parse YAML config: %w", err)
 	}
-	if err := config.Validate(); err != nil {
+	if err := config.ValidateForMode(mode); err != nil {
 		return Config{}, err
 	}
 	return config, nil
 }
 
 func (c Config) Validate() error {
+	return c.ValidateForMode(PublishModeDefault)
+}
+
+func (c Config) ValidateForMode(mode PublishMode) error {
+	if mode != PublishModeDefault && mode != PublishModeTest {
+		return fmt.Errorf("unsupported publish mode %q", mode)
+	}
 	if c.Package.Path == "" && c.Package.ArchivePath == "" {
 		return fmt.Errorf("one of package.path or package.archive_path is required")
 	}
@@ -118,7 +134,7 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.Package.NPM.Tag) != c.Package.NPM.Tag {
 		return fmt.Errorf("package.npm.tag cannot contain leading or trailing whitespace")
 	}
-	if c.RepositoryProfile == TestRepositoryProfile {
+	if mode == PublishModeTest {
 		return c.validateOptions()
 	}
 	profile, ok := c.Repositories[c.RepositoryProfile]

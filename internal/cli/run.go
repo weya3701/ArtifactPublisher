@@ -23,12 +23,13 @@ import (
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "publish" {
-		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml")
+		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test]")
 		return 2
 	}
 	flags := flag.NewFlagSet("publish", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "path to publisher YAML configuration")
+	modeValue := flags.String("mode", "", "publish mode (test for offline simulation)")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -36,7 +37,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "--config is required")
 		return 2
 	}
-	loaded, err := config.Load(*configPath)
+	mode := config.PublishMode(*modeValue)
+	if mode != config.PublishModeDefault && mode != config.PublishModeTest {
+		fmt.Fprintf(stderr, "unsupported --mode %q; supported mode is test\n", *modeValue)
+		return 2
+	}
+	loaded, err := config.LoadForMode(*configPath, mode)
 	if err != nil {
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
@@ -56,9 +62,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if batchMode {
-		return runBatch(ctx, loaded, batchPaths, stdout)
+		return runBatch(ctx, loaded, batchPaths, mode, stdout)
 	}
-	components, err := bootstrap.Build(loaded, secret.Environment{})
+	components, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 	if err != nil {
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
@@ -78,8 +84,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 var extractArchive = archive.Extract
 
-func runBatch(ctx context.Context, loaded config.Config, paths []string, stdout io.Writer) int {
-	firstComponents, err := bootstrap.Build(loaded, secret.Environment{})
+func runBatch(ctx context.Context, loaded config.Config, paths []string, mode config.PublishMode, stdout io.Writer) int {
+	firstComponents, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 	if err != nil {
 		writeFailure(stdout, "CONFIGURATION", err)
 		return 2
@@ -103,7 +109,7 @@ func runBatch(ctx context.Context, loaded config.Config, paths []string, stdout 
 				service := firstComponents.Service
 				return service, nil
 			}
-			components, err := bootstrap.Build(loaded, secret.Environment{})
+			components, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 			if err != nil {
 				return nil, err
 			}

@@ -37,7 +37,7 @@ go build -o package-publisher ./cmd/publisher
 若畫面顯示以下用法，表示執行檔可正常啟動：
 
 ```text
-usage: package-publisher publish --config publisher.yaml
+usage: package-publisher publish --config publisher.yaml [--mode=test]
 ```
 
 也可以不先建置，直接使用：
@@ -566,7 +566,7 @@ package:
 
 ### 11.1 本機模擬
 
-將 `repository_profile` 設為 `test`，可在不設定 repository、不提供 credential、也不執行外部上傳工具的情況下驗證本機套件：
+執行 publish 時加入 `--mode=test`，可在不設定 repository、不提供 credential、也不執行外部上傳工具的情況下驗證本機套件：
 
 ```yaml
 package:
@@ -575,12 +575,16 @@ package:
   publish_driver: npm_cli
   recursive: true
 
-repository_profile: test
-
 options:
   parallelism: 4
   fail_fast: false
 ```
+
+```bash
+./package-publisher publish --config publisher.yaml --mode=test
+```
+
+Test mode 會忽略設定檔中的 `repository_profile` 與 `repositories`；這兩個欄位可以保留正式環境設定，也可以省略。
 
 模擬模式只驗證探索、套件解析與本機內容；不代表遠端連線及權限正確。
 
@@ -600,7 +604,7 @@ options:
 
 建議上線前依序執行：
 
-1. `repository_profile: test` 驗證本機套件。
+1. 使用 `--mode=test` 驗證本機套件。
 2. 切回正式 profile，設定 `dry_run: true` 驗證遠端。
 3. 確認結果後設定 `dry_run: false` 正式發佈。
 

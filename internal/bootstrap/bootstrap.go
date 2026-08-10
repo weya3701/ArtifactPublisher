@@ -27,6 +27,10 @@ type Components struct {
 }
 
 func Build(c config.Config, secrets SecretResolver) (Components, error) {
+	return BuildForMode(c, secrets, config.PublishModeDefault)
+}
+
+func BuildForMode(c config.Config, secrets SecretResolver, mode config.PublishMode) (Components, error) {
 	var handler packagehandler.Handler
 	if c.Package.Format == string(model.FormatMaven) {
 		handler = mavenhandler.Handler{Fallback: mavenhandler.Coordinates{
@@ -57,7 +61,7 @@ func Build(c config.Config, secrets SecretResolver) (Components, error) {
 		return Components{}, err
 	}
 	request := model.PublishRequest{PackagePath: c.Package.Path, Options: options, Metadata: c.Metadata}
-	if c.RepositoryProfile == config.TestRepositoryProfile {
+	if mode == config.PublishModeTest {
 		return Components{
 			Service: publisher.Service{Handler: handler, Simulation: true},
 			Request: request,
