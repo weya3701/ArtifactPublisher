@@ -43,12 +43,11 @@ func TestBuildSelectsNexusFromRepositoryProfile(t *testing.T) {
 	}
 }
 
-func TestBuildTestProfileDoesNotResolveSecrets(t *testing.T) {
+func TestBuildTestModeDoesNotResolveSecrets(t *testing.T) {
 	resolver := &rejectingSecretResolver{}
-	components, err := bootstrap.Build(config.Config{
-		Package:           config.PackageConfig{Path: "package.tgz", Format: "npm", PublishDriver: "npm_cli"},
-		RepositoryProfile: config.TestRepositoryProfile,
-	}, resolver)
+	components, err := bootstrap.BuildForMode(config.Config{
+		Package: config.PackageConfig{Path: "package.tgz", Format: "npm", PublishDriver: "npm_cli"},
+	}, resolver, config.PublishModeTest)
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}

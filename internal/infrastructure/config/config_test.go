@@ -158,13 +158,22 @@ func TestValidateReportsAvailableRepositoryProfiles(t *testing.T) {
 	}
 }
 
-func TestValidateAcceptsTestRepositoryProfileWithoutRepository(t *testing.T) {
+func TestValidateForTestModeAcceptsMissingRepository(t *testing.T) {
+	configValue := config.Config{
+		Package: config.PackageConfig{Path: "packages", Format: "npm", PublishDriver: "npm_cli"},
+	}
+	if err := configValue.ValidateForMode(config.PublishModeTest); err != nil {
+		t.Fatalf("ValidateForMode() error = %v", err)
+	}
+}
+
+func TestValidateRejectsTestAsRepositoryProfile(t *testing.T) {
 	configValue := config.Config{
 		Package:           config.PackageConfig{Path: "packages", Format: "npm", PublishDriver: "npm_cli"},
-		RepositoryProfile: config.TestRepositoryProfile,
+		RepositoryProfile: "test",
 	}
-	if err := configValue.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
+	if err := configValue.Validate(); err == nil {
+		t.Fatal("expected test repository profile to require a configured repository")
 	}
 }
 
@@ -173,10 +182,9 @@ func TestValidateAcceptsArchivePathInsteadOfPath(t *testing.T) {
 		Package: config.PackageConfig{
 			ArchivePath: "approved-packages.zip", Format: "npm", PublishDriver: "npm_cli", Recursive: true,
 		},
-		RepositoryProfile: config.TestRepositoryProfile,
 	}
-	if err := configValue.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
+	if err := configValue.ValidateForMode(config.PublishModeTest); err != nil {
+		t.Fatalf("ValidateForMode() error = %v", err)
 	}
 }
 
@@ -185,9 +193,8 @@ func TestValidateRejectsPathAndArchivePathTogether(t *testing.T) {
 		Package: config.PackageConfig{
 			Path: "packages", ArchivePath: "approved-packages.zip", Format: "npm", PublishDriver: "npm_cli",
 		},
-		RepositoryProfile: config.TestRepositoryProfile,
 	}
-	err := configValue.Validate()
+	err := configValue.ValidateForMode(config.PublishModeTest)
 	if err == nil || !strings.Contains(err.Error(), "cannot be configured together") {
 		t.Fatalf("Validate() error = %v", err)
 	}

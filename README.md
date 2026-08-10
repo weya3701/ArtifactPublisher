@@ -103,7 +103,13 @@ repositories:
 
 `base_url` 是 Nexus server 的根路徑（若安裝於 context path，例：`https://host/nexus`，需包含該路徑），不要包含 `/repository/<name>`。密碼仍只透過 `credential_ref` 指定的環境變數提供。
 
-若設定 `repository_profile: test`，程式會進入離線推送模擬模式。此模式不需要設定 `repositories.test` 或 PAT，不會連線 Artifact Feed，也不會執行 Maven、npm 或 Twine 推送；本地套件可成功解析與驗證時輸出 `SUCCESS`，否則輸出 `FAILED`。批次模式會逐項列出結果並彙總成功與失敗數量。
+加入 `--mode=test` 會進入離線推送模擬模式：
+
+```bash
+./package-publisher publish --config publisher.yaml --mode=test
+```
+
+此模式會忽略 `repository_profile` 與 `repositories`，因此設定檔可不包含 repository，也不需要 PAT。程式不會連線 Artifact Feed，亦不會執行 Maven、npm 或 Twine 推送；本地套件可成功解析與驗證時輸出 `SUCCESS`，否則輸出 `FAILED`。批次模式會逐項列出結果並彙總成功與失敗數量。
 
 設定 credential 並執行（依選用的 profile 設定其中一個）：
 
