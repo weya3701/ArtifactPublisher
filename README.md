@@ -2,7 +2,7 @@
 
 Package Publisher 是一個以 Go 實作的套件入庫工具，負責將已下載、已掃描並已核准的第三方套件發佈至 Azure DevOps Artifacts 或 Sonatype Nexus Repository。
 
-目前支援 Maven、npm 與 PyPI，提供單套件及大量套件批次處理、內容衝突保護、SHA-256 驗證、重試、dry-run 與結構化 JSON 報告。
+目前支援 Maven、npm 與 PyPI，提供單套件及大量套件批次處理、內容衝突保護、SHA-256 驗證、重試、dry-run 與結構化 JSON／CSV 報告。
 
 完整的安裝、操作步驟，以及 Maven、npm、PyPI 搭配 ADO、Nexus 的設定檔範例，請參閱[使用者操作手冊](docs/user-manual.zh-TW.md)。
 
@@ -111,6 +111,18 @@ repositories:
 
 此模式會忽略 `repository_profile` 與 `repositories`，因此設定檔可不包含 repository，也不需要 PAT。程式不會連線 Artifact Feed，亦不會執行 Maven、npm 或 Twine 推送；本地套件可成功解析與驗證時輸出 `SUCCESS`，否則輸出 `FAILED`。批次模式會逐項列出結果並彙總成功與失敗數量。
 
+可用 `--output=json` 或 `--output=csv` 選擇結果格式；未指定時維持既有 JSON 格式。若要直接寫入檔案，加入與格式相符的 `--file`：
+
+```bash
+./package-publisher publish --config publisher.yaml --mode=test \
+  --output=json --file=publish-result.json
+
+./package-publisher publish --config publisher.yaml --mode=test \
+  --output=csv --file=publish-result.csv
+```
+
+只指定 `--file` 時會由副檔名決定格式（`.json` 或 `.csv`）。使用 `--file` 後結果不會重複寫到 `stdout`。
+
 設定 credential 並執行（依選用的 profile 設定其中一個）：
 
 ```bash
@@ -133,7 +145,7 @@ go build -o package-publisher ./cmd/publisher
 ./package-publisher publish --config publisher.yaml --verbose
 ```
 
-進度訊息會寫入 `stderr`，最終 JSON 仍單獨寫入 `stdout`，因此可安全地將 JSON 導向檔案。`--verbose` 亦可與 `--mode=test` 同時使用。
+進度訊息會寫入 `stderr`，最終 JSON 或 CSV 仍單獨寫入 `stdout`（或 `--file` 指定的檔案）。`--verbose` 亦可與 `--mode=test` 同時使用。
 
 ## 設定說明
 
@@ -335,7 +347,9 @@ Batch 行為：
 
 ## 輸出與 Exit Code
 
-單套件輸出 `PublishResult`，Batch 輸出 `BatchPublishReport`。兩者均為 JSON，包含套件座標、checksum、repository、狀態、時間、錯誤類型與 metadata。
+單套件輸出 `PublishResult`，Batch 輸出 `BatchPublishReport`，可透過 `--output=json|csv` 選擇格式；預設為 JSON。這些參數同時適用於正式發佈與 `--mode=test`。若使用 `--file`，副檔名必須與輸出格式一致，結果只寫入該檔案。
+
+CSV 的單套件結果為一列；Batch 每個套件結果各一列，並在每列重複 `batch.*` 彙總欄位。`package.files` 以 JSON array 保存在單一 CSV 欄位中，避免遺失檔案明細。
 
 狀態：
 

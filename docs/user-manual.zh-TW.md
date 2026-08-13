@@ -37,7 +37,7 @@ go build -o package-publisher ./cmd/publisher
 若畫面顯示以下用法，表示執行檔可正常啟動：
 
 ```text
-usage: package-publisher publish --config publisher.yaml [--mode=test] [--verbose]
+usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--verbose]
 ```
 
 也可以不先建置，直接使用：
@@ -52,12 +52,24 @@ go run ./cmd/publisher publish --config publisher.yaml
 ./package-publisher publish --config publisher.yaml --verbose
 ```
 
-進度訊息會寫入 `stderr`，發佈結果 JSON 仍寫入 `stdout`。若要分別保存兩者，可執行：
+進度訊息會寫入 `stderr`，發佈結果 JSON 或 CSV 仍寫入 `stdout`。若要分別保存兩者，可執行：
 
 ```bash
 ./package-publisher publish --config publisher.yaml --verbose \
   > publish-result.json 2> publish-progress.log
 ```
+
+也可使用 `--file` 直接寫入實體檔案；此時結果不會重複寫到 `stdout`：
+
+```bash
+./package-publisher publish --config publisher.yaml --output=json \
+  --file=publish-result.json
+
+./package-publisher publish --config publisher.yaml --output=csv \
+  --file=publish-result.csv
+```
+
+`--output` 支援 `json` 與 `csv`，未指定時預設為 JSON。只指定 `--file` 時會依 `.json` 或 `.csv` 副檔名選擇格式；同時指定兩者時，副檔名必須與格式一致。
 
 ### 2.2 安裝各格式所需工具
 
@@ -93,7 +105,7 @@ Nexus：
 3. 將密碼或 PAT 放入環境變數。
 4. 視需要先執行本機模擬或 `dry_run`。
 5. 執行正式發佈。
-6. 檢查 JSON 結果及 exit code。
+6. 檢查 JSON／CSV 結果及 exit code。
 
 正式執行：
 
@@ -234,7 +246,7 @@ Existing package policy：
 
 ### 4.4 `metadata`
 
-`metadata` 會原樣出現在 JSON 結果，方便與 CI/CD 執行紀錄關聯；欄位可留空或整段省略。
+`metadata` 會出現在輸出結果中，方便與 CI/CD 執行紀錄關聯；欄位可留空或整段省略。
 
 ```yaml
 metadata:
@@ -656,13 +668,15 @@ options:
 - `fail_fast: false`：某個套件失敗後繼續處理其他套件。
 - `fail_fast: true`：第一個錯誤後取消尚未開始的項目。
 - 已成功發佈的套件不會因後續錯誤而 rollback。
-- JSON report 的結果順序維持 discovery 順序。
+- JSON／CSV report 的結果順序維持 discovery 順序。
 
 大量發佈時，建議先使用較低的 `parallelism`（例如 4），再依 repository 負載與網路狀況調整。
 
 ## 13. 輸出、狀態與 Exit Code
 
-單套件輸出 `PublishResult`，批次輸出 `BatchPublishReport`，格式皆為 JSON。
+單套件輸出 `PublishResult`，批次輸出 `BatchPublishReport`。使用 `--output=json|csv` 選擇輸出格式，未指定時維持 JSON；正式發佈與 `--mode=test` 的行為相同。使用 `--file=publish-result.json` 或 `--file=publish-result.csv` 可將結果直接寫入檔案。
+
+CSV 單套件結果包含一列表頭與一列資料。批次結果每個套件各占一列，`batch.status`、`batch.total`、`batch.succeeded`、`batch.skipped`、`batch.failed`、`batch.startedAt` 與 `batch.finishedAt` 等彙總欄位會重複在每列。`package.files` 會以 JSON array 寫在單一 CSV 欄位中。
 
 主要狀態：
 
@@ -739,7 +753,7 @@ go build -o package-publisher ./cmd/publisher
 安全原則：
 
 - PAT 與密碼只能透過 `credential_ref` 指向的環境變數提供。
-- 不要將 secret 寫進 YAML、Git、命令列參數或 JSON report。
+- 不要將 secret 寫進 YAML、Git、命令列參數或輸出 report。
 - Maven 臨時 settings 與 npm 臨時 `.npmrc` 權限為 `0600`。
 - Twine credential 由環境傳入。
 - 發佈錯誤會遮蔽已知 secret。

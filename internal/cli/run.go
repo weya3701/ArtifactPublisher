@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -23,15 +22,22 @@ import (
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "publish" {
-		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test] [--verbose]")
+		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--verbose]")
 		return 2
 	}
 	flags := flag.NewFlagSet("publish", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "path to publisher YAML configuration")
 	modeValue := flags.String("mode", "", "publish mode (test for offline simulation)")
+	outputValue := flags.String("output", "", "result output format (json or csv; default json)")
+	filePath := flags.String("file", "", "write the result to a .json or .csv file instead of stdout")
 	verbose := flags.Bool("verbose", false, "show publish progress on stderr")
 	if err := flags.Parse(args[1:]); err != nil {
+		return 2
+	}
+	resultDestination, err := newResultOutput(*outputValue, *filePath, stdout)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
 	if *configPath == "" {
@@ -48,7 +54,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	loaded, err := config.LoadForMode(*configPath, mode)
 	if err != nil {
 		progress.Printf("configuration failed: %v", err)
-		writeFailure(stdout, "CONFIGURATION", err)
+		writeFailure(resultDestination, stderr, "CONFIGURATION", err)
 		return 2
 	}
 	progress.Printf("configuration loaded: format=%s mode=%s", loaded.Package.Format, displayMode(mode))
@@ -58,7 +64,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		loaded.Package.Path, cleanup, err = extractArchive(loaded.Package.ArchivePath)
 		if err != nil {
 			progress.Printf("archive extraction failed: %v", err)
-			writeFailure(stdout, "PACKAGE", err)
+			writeFailure(resultDestination, stderr, "PACKAGE", err)
 			return 1
 		}
 		defer cleanup()
@@ -68,25 +74,23 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	batchPaths, batchMode, err := resolveBatchMode(loaded)
 	if err != nil {
 		progress.Printf("package discovery failed: %v", err)
-		writeFailure(stdout, "PACKAGE", err)
+		writeFailure(resultDestination, stderr, "PACKAGE", err)
 		return 1
 	}
 	if batchMode {
 		progress.Printf("discovered %d package(s); using batch publish", len(batchPaths))
-		return runBatch(ctx, loaded, batchPaths, mode, stdout, progress)
+		return runBatch(ctx, loaded, batchPaths, mode, resultDestination, stderr, progress)
 	}
 	progress.Printf("using single-package publish")
 	components, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 	if err != nil {
 		progress.Printf("publisher initialization failed: %v", err)
-		writeFailure(stdout, "CONFIGURATION", err)
+		writeFailure(resultDestination, stderr, "CONFIGURATION", err)
 		return 2
 	}
 	result, publishErr := withProgress(components.Service, progress).Publish(ctx, components.Request)
-	encoder := json.NewEncoder(stdout)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(result); err != nil {
-		fmt.Fprintf(stderr, "encode result: %v\n", err)
+	if err := resultDestination.Write(result); err != nil {
+		fmt.Fprintf(stderr, "write result: %v\n", err)
 		return 1
 	}
 	if publishErr != nil {
@@ -97,7 +101,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 var extractArchive = archive.Extract
 
-func runBatch(ctx context.Context, loaded config.Config, paths []string, mode config.PublishMode, stdout io.Writer, progress *progressReporter) int {
+func runBatch(ctx context.Context, loaded config.Config, paths []string, mode config.PublishMode, output resultOutput, stderr io.Writer, progress *progressReporter) int {
 	parallelism := loaded.Options.Parallelism
 	if parallelism <= 0 {
 		parallelism = publisher.DefaultParallelism()
@@ -109,13 +113,13 @@ func runBatch(ctx context.Context, loaded config.Config, paths []string, mode co
 	firstComponents, err := bootstrap.BuildForMode(loaded, secret.Environment{}, mode)
 	if err != nil {
 		progress.Printf("batch publisher initialization failed: %v", err)
-		writeFailure(stdout, "CONFIGURATION", err)
+		writeFailure(output, stderr, "CONFIGURATION", err)
 		return 2
 	}
 	options, err := loaded.PublishOptions()
 	if err != nil {
 		progress.Printf("publish options are invalid: %v", err)
-		writeFailure(stdout, "CONFIGURATION", err)
+		writeFailure(output, stderr, "CONFIGURATION", err)
 		return 2
 	}
 	requests := make([]model.PublishRequest, len(paths))
@@ -141,9 +145,8 @@ func runBatch(ctx context.Context, loaded config.Config, paths []string, mode co
 	}
 	report, publishErr := batch.Publish(ctx, requests)
 	progress.Printf("batch finished: status=%s succeeded=%d skipped=%d failed=%d", report.Status, report.Succeeded, report.Skipped, report.Failed)
-	encoder := json.NewEncoder(stdout)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(report); err != nil {
+	if err := output.Write(report); err != nil {
+		fmt.Fprintf(stderr, "write result: %v\n", err)
 		return 1
 	}
 	if publishErr != nil {
@@ -203,8 +206,10 @@ func discoverPackages(format, root string) ([]string, error) {
 	return discovery.MavenPackages(root)
 }
 
-func writeFailure(output io.Writer, errorType string, err error) {
-	_ = json.NewEncoder(output).Encode(model.PublishResult{
+func writeFailure(output resultOutput, stderr io.Writer, errorType string, err error) {
+	if writeErr := output.Write(model.PublishResult{
 		Status: model.StatusFailed, ErrorType: errorType, ErrorMessage: err.Error(),
-	})
+	}); writeErr != nil {
+		fmt.Fprintf(stderr, "write result: %v\n", writeErr)
+	}
 }
