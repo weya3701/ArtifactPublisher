@@ -19,6 +19,9 @@ func TestBuildPackageDescriptorGroupsWheelAndSourceDistribution(t *testing.T) {
 	metadata := "Metadata-Version: 2.1\nName: Demo_Pkg\nVersion: 1.2.3\n\n"
 	createWheel(t, wheel, "Demo_Pkg-1.2.3.dist-info/METADATA", metadata)
 	createSourceDistribution(t, sdist, "demo-pkg-1.2.3/PKG-INFO", metadata)
+	if err := os.WriteFile(filepath.Join(directory, "._demo-pkg-1.2.3.tar.gz"), []byte("AppleDouble metadata"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	descriptor, err := (pypihandler.Handler{}).BuildPackageDescriptor(context.Background(), wheel)
 	if err != nil {
@@ -30,6 +33,18 @@ func TestBuildPackageDescriptorGroupsWheelAndSourceDistribution(t *testing.T) {
 	for _, path := range []string{wheel + ".sha256", sdist + ".sha256"} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("SHA sidecar %q missing: %v", path, err)
+		}
+	}
+}
+
+func TestIsDistributionRejectsHiddenFiles(t *testing.T) {
+	for _, path := range []string{
+		".demo-1.0.0.whl",
+		"._demo-1.0.0.tar.gz",
+		filepath.Join("packages", ".demo-1.0.0.zip"),
+	} {
+		if pypihandler.IsDistribution(path) {
+			t.Fatalf("IsDistribution(%q) = true, want false", path)
 		}
 	}
 }

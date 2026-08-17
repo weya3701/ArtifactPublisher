@@ -146,7 +146,7 @@ func TestRunOutputCSVWritesSingleResultToStdout(t *testing.T) {
 		t.Fatalf("CSV record count = %d, want 2: %#v", len(records), records)
 	}
 	result := csvRecord(records[0], records[1])
-	if result["status"] != "SUCCESS" || result["package.name"] != "demo" || result["package.version"] != "1.0.0" {
+	if result["sourceFile"] != packagePath || result["status"] != "SUCCESS" {
 		t.Fatalf("unexpected CSV result: %#v", result)
 	}
 }
@@ -228,7 +228,7 @@ func TestRunOutputCSVWritesBatchResultFile(t *testing.T) {
 	}
 	for _, record := range records[1:] {
 		result := csvRecord(records[0], record)
-		if result["batch.status"] != "SUCCESS" || result["batch.total"] != "2" || result["status"] != "SUCCESS" {
+		if !strings.HasPrefix(result["sourceFile"], packagesPath+string(filepath.Separator)) || result["status"] != "SUCCESS" {
 			t.Fatalf("unexpected batch CSV result: %#v", result)
 		}
 	}
@@ -325,7 +325,7 @@ options:
 			t.Fatalf("CSV record count = %d, want 2: %#v", len(records), records)
 		}
 		result := csvRecord(records[0], records[1])
-		if result["status"] != "SKIPPED" || result["repositoryProvider"] != "ado" || result["repositoryName"] != "feed" {
+		if result["sourceFile"] != packagePath || result["status"] != "SKIPPED" {
 			t.Fatalf("unexpected production CSV result: %#v", result)
 		}
 	})

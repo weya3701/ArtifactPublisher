@@ -194,6 +194,7 @@ package:
 Publisher 會將封裝檔解壓至暫存目錄，再沿用既有的套件探索、驗證與
 Batch Publish 流程；執行結束後會移除暫存內容。為避免 Zip Slip 等攻擊，
 壓縮檔內的絕對路徑、上層路徑、符號連結及特殊檔案都會被拒絕。
+解壓時會直接略過 `._*`、`.DS_Store` 與 `__MACOSX` 內的 macOS metadata，不會將它們寫入暫存目錄。
 
 `archive_path` 表示包住套件的「外層封裝」，不能和 `path` 同時設定。
 npm 的 `.tgz` 或 PyPI 的 `.zip` 若本身就是待發佈套件，仍應使用 `path`。
@@ -314,6 +315,8 @@ PyPI 支援：
 
 套件名稱與版本直接取自 wheel 的 `METADATA` 或 sdist 的 `PKG-INFO`，不以檔名猜測。名稱會依 Python packaging 規則正規化。
 
+探索時會忽略檔名或目錄名稱以 `.` 開頭的隱藏項目，包括 macOS 壓縮檔常見的 `._` AppleDouble metadata；這些項目不會嘗試發佈，也不會出現在 CSV 清單。
+
 同一目錄內相同 name/version 的 wheel 與 sdist 會合併為一個 bundle，交由 Twine 一次發佈。Recursive discovery 會依正規化 name/version 去重，適合 `pip download` 產生的 flat directory。
 
 下載範例：
@@ -349,7 +352,7 @@ Batch 行為：
 
 單套件輸出 `PublishResult`，Batch 輸出 `BatchPublishReport`，可透過 `--output=json|csv` 選擇格式；預設為 JSON。這些參數同時適用於正式發佈與 `--mode=test`。若使用 `--file`，副檔名必須與輸出格式一致，結果只寫入該檔案。
 
-CSV 的單套件結果為一列；Batch 每個套件結果各一列，並在每列重複 `batch.*` 彙總欄位。`package.files` 以 JSON array 保存在單一 CSV 欄位中，避免遺失檔案明細。
+CSV 僅包含 `sourceFile` 與 `status` 兩欄，每個實際來源檔案各占一列。若同一套件含多個檔案（例如 PyPI 同版本的 wheel 與 sdist），每個檔案都會列出該次套件發佈狀態；若套件在檔案清單建立前即失敗，則以原始輸入路徑作為 `sourceFile`。
 
 狀態：
 

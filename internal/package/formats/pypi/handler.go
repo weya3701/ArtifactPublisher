@@ -47,7 +47,11 @@ func (Handler) Detect(path string) bool {
 }
 
 func IsDistribution(path string) bool {
-	lower := strings.ToLower(path)
+	name := filepath.Base(path)
+	if strings.HasPrefix(name, ".") {
+		return false
+	}
+	lower := strings.ToLower(name)
 	return strings.HasSuffix(lower, ".whl") || strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".zip")
 }
 

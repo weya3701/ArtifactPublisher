@@ -73,6 +73,9 @@ func extractZIP(path, destination string) error {
 		if err != nil {
 			return err
 		}
+		if isMacOSMetadata(entry.Name) {
+			continue
+		}
 		mode := entry.Mode()
 		if mode&os.ModeSymlink != 0 {
 			return fmt.Errorf("package archive contains unsupported symbolic link %q", entry.Name)
@@ -106,6 +109,9 @@ func extractTAR(reader *tar.Reader, destination string) error {
 		if err != nil {
 			return err
 		}
+		if isMacOSMetadata(header.Name) {
+			continue
+		}
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0o755); err != nil {
@@ -122,6 +128,16 @@ func extractTAR(reader *tar.Reader, destination string) error {
 			return fmt.Errorf("package archive contains unsupported link or special entry %q", header.Name)
 		}
 	}
+}
+
+func isMacOSMetadata(name string) bool {
+	clean := filepath.Clean(filepath.FromSlash(name))
+	for _, component := range strings.Split(clean, string(filepath.Separator)) {
+		if component == "__MACOSX" || component == ".DS_Store" || strings.HasPrefix(component, "._") {
+			return true
+		}
+	}
+	return false
 }
 
 func safeTarget(root, name string) (string, error) {

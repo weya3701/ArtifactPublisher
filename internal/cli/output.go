@@ -8,9 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"packagespublisher/internal/model"
 )
@@ -75,71 +73,26 @@ func (o resultOutput) Write(value any) error {
 	return nil
 }
 
-var publishResultCSVHeader = []string{
-	"status",
-	"inputPath",
-	"package.format",
-	"package.namespace",
-	"package.name",
-	"package.version",
-	"package.packaging",
-	"package.files",
-	"package.sha256",
-	"repositoryProvider",
-	"repositoryName",
-	"remoteUrl",
-	"startedAt",
-	"finishedAt",
-	"errorType",
-	"errorMessage",
-	"metadata.pipelineId",
-	"metadata.buildId",
-	"metadata.commitSha",
-	"metadata.correlationId",
-}
-
-var batchCSVHeader = []string{
-	"batch.status",
-	"batch.total",
-	"batch.succeeded",
-	"batch.skipped",
-	"batch.failed",
-	"batch.startedAt",
-	"batch.finishedAt",
-}
+var sourceFileCSVHeader = []string{"sourceFile", "status"}
 
 func encodeCSV(output io.Writer, value any) error {
 	writer := csv.NewWriter(output)
+	if err := writer.Write(sourceFileCSVHeader); err != nil {
+		return err
+	}
 	switch report := value.(type) {
 	case model.PublishResult:
-		if err := writer.Write(publishResultCSVHeader); err != nil {
-			return err
-		}
-		row, err := publishResultCSVRow(report)
-		if err != nil {
-			return err
-		}
-		if err := writer.Write(row); err != nil {
-			return err
+		for _, row := range publishResultCSVRows(report) {
+			if err := writer.Write(row); err != nil {
+				return err
+			}
 		}
 	case model.BatchPublishReport:
-		header := append(append([]string{}, batchCSVHeader...), publishResultCSVHeader...)
-		if err := writer.Write(header); err != nil {
-			return err
-		}
-		summary := batchCSVSummary(report)
-		if len(report.Results) == 0 {
-			if err := writer.Write(append(summary, make([]string, len(publishResultCSVHeader))...)); err != nil {
-				return err
-			}
-		}
 		for _, result := range report.Results {
-			row, err := publishResultCSVRow(result)
-			if err != nil {
-				return err
-			}
-			if err := writer.Write(append(append([]string{}, summary...), row...)); err != nil {
-				return err
+			for _, row := range publishResultCSVRows(result) {
+				if err := writer.Write(row); err != nil {
+					return err
+				}
 			}
 		}
 	default:
@@ -149,47 +102,18 @@ func encodeCSV(output io.Writer, value any) error {
 	return writer.Error()
 }
 
-func publishResultCSVRow(result model.PublishResult) ([]string, error) {
-	files, err := json.Marshal(result.Package.Files)
-	if err != nil {
-		return nil, fmt.Errorf("encode package files: %w", err)
+func publishResultCSVRows(result model.PublishResult) [][]string {
+	status := string(result.Status)
+	if len(result.Package.Files) == 0 {
+		return [][]string{{result.InputPath, status}}
 	}
-	return []string{
-		string(result.Status),
-		result.InputPath,
-		string(result.Package.Format),
-		result.Package.Namespace,
-		result.Package.Name,
-		result.Package.Version,
-		result.Package.Packaging,
-		string(files),
-		result.Package.SHA256,
-		result.RepositoryProvider,
-		result.RepositoryName,
-		result.RemoteURL,
-		formatCSVTime(result.StartedAt),
-		formatCSVTime(result.FinishedAt),
-		result.ErrorType,
-		result.ErrorMessage,
-		result.Metadata.PipelineID,
-		result.Metadata.BuildID,
-		result.Metadata.CommitSHA,
-		result.Metadata.CorrelationID,
-	}, nil
-}
-
-func batchCSVSummary(report model.BatchPublishReport) []string {
-	return []string{
-		string(report.Status),
-		strconv.Itoa(report.Total),
-		strconv.Itoa(report.Succeeded),
-		strconv.Itoa(report.Skipped),
-		strconv.Itoa(report.Failed),
-		formatCSVTime(report.StartedAt),
-		formatCSVTime(report.FinishedAt),
+	rows := make([][]string, 0, len(result.Package.Files))
+	for _, file := range result.Package.Files {
+		sourceFile := file.Path
+		if sourceFile == "" {
+			sourceFile = file.Name
+		}
+		rows = append(rows, []string{sourceFile, status})
 	}
-}
-
-func formatCSVTime(value time.Time) string {
-	return value.Format(time.RFC3339Nano)
+	return rows
 }

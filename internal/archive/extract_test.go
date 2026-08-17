@@ -25,6 +25,17 @@ func TestExtractZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = entry.Write([]byte(`{"name":"demo"}`))
+	for _, name := range []string{
+		"__MACOSX/repository/demo/._package.json",
+		"repository/demo/._package.json",
+		"repository/demo/.DS_Store",
+	} {
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = entry.Write([]byte("macOS metadata"))
+	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +50,15 @@ func TestExtractZIP(t *testing.T) {
 	extracted := filepath.Join(directory, "repository", "demo", "package.json")
 	if content, err := os.ReadFile(extracted); err != nil || string(content) != `{"name":"demo"}` {
 		t.Fatalf("content=%q error=%v", content, err)
+	}
+	for _, name := range []string{
+		"__MACOSX",
+		filepath.Join("repository", "demo", "._package.json"),
+		filepath.Join("repository", "demo", ".DS_Store"),
+	} {
+		if _, err := os.Stat(filepath.Join(directory, name)); !os.IsNotExist(err) {
+			t.Fatalf("macOS metadata %q was extracted: %v", name, err)
+		}
 	}
 	cleanup()
 	if _, err := os.Stat(directory); !os.IsNotExist(err) {
@@ -59,6 +79,13 @@ func TestExtractTarGZIP(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = writer.Write(content)
+	metadata := []byte("macOS metadata")
+	for _, name := range []string{"repo/._demo.jar", "repo/.DS_Store", "__MACOSX/._demo.jar"} {
+		if err := writer.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(metadata))}); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = writer.Write(metadata)
+	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +103,15 @@ func TestExtractTarGZIP(t *testing.T) {
 	defer cleanup()
 	if got, err := os.ReadFile(filepath.Join(directory, "repo", "demo.jar")); err != nil || !bytes.Equal(got, content) {
 		t.Fatalf("content=%q error=%v", got, err)
+	}
+	for _, name := range []string{
+		filepath.Join("repo", "._demo.jar"),
+		filepath.Join("repo", ".DS_Store"),
+		"__MACOSX",
+	} {
+		if _, err := os.Stat(filepath.Join(directory, name)); !os.IsNotExist(err) {
+			t.Fatalf("macOS metadata %q was extracted: %v", name, err)
+		}
 	}
 }
 

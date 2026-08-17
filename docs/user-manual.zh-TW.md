@@ -526,6 +526,8 @@ package:
 
 支援 wheel（`.whl`）及 source distribution（`.tar.gz`、`.zip`）。套件名稱及版本會從 `METADATA` 或 `PKG-INFO` 讀取。
 
+探索時會忽略檔名或目錄名稱以 `.` 開頭的隱藏項目，包括 macOS 壓縮檔常見的 `._` AppleDouble metadata；這些項目不會嘗試發佈，也不會出現在 CSV 清單。
+
 可先下載待核准套件：
 
 ```bash
@@ -589,7 +591,7 @@ package:
   recursive: true
 ```
 
-支援 `.zip`、`.tar`、`.tar.gz`、`.tgz`。工具會解壓至暫存目錄、執行探索及發佈，結束後清除暫存內容。
+支援 `.zip`、`.tar`、`.tar.gz`、`.tgz`。工具會解壓至暫存目錄、執行探索及發佈，結束後清除暫存內容。解壓時會直接略過 `._*`、`.DS_Store` 與 `__MACOSX` 內的 macOS metadata，不會將它們寫入暫存目錄。
 
 `archive_path` 是包住套件的外層封裝。若 npm `.tgz` 或 PyPI `.zip` 本身就是要發佈的套件，仍應使用 `path`：
 
@@ -676,7 +678,7 @@ options:
 
 單套件輸出 `PublishResult`，批次輸出 `BatchPublishReport`。使用 `--output=json|csv` 選擇輸出格式，未指定時維持 JSON；正式發佈與 `--mode=test` 的行為相同。使用 `--file=publish-result.json` 或 `--file=publish-result.csv` 可將結果直接寫入檔案。
 
-CSV 單套件結果包含一列表頭與一列資料。批次結果每個套件各占一列，`batch.status`、`batch.total`、`batch.succeeded`、`batch.skipped`、`batch.failed`、`batch.startedAt` 與 `batch.finishedAt` 等彙總欄位會重複在每列。`package.files` 會以 JSON array 寫在單一 CSV 欄位中。
+CSV 僅包含 `sourceFile` 與 `status` 兩欄，每個實際來源檔案各占一列。若同一套件含多個檔案（例如 PyPI 同版本的 wheel 與 sdist），每個檔案都會列出該次套件發佈狀態；若套件在檔案清單建立前即失敗，則以原始輸入路徑作為 `sourceFile`。批次彙總與完整套件資訊仍可由 JSON 輸出取得。
 
 主要狀態：
 

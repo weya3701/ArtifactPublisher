@@ -27,6 +27,28 @@ func TestPyPIPackagesDeduplicatesDistributionsByNameAndVersion(t *testing.T) {
 	}
 }
 
+func TestPyPIPackagesIgnoresHiddenFilesAndDirectories(t *testing.T) {
+	root := t.TempDir()
+	wheel := filepath.Join(root, "demo-1.0.0-py3-none-any.whl")
+	createMetadataZip(t, wheel, "demo-1.0.0.dist-info/METADATA", "Name: demo\nVersion: 1.0.0\n\n")
+	if err := os.WriteFile(filepath.Join(root, "._PyYAML-6.0.1.tar.gz"), []byte("AppleDouble metadata"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hiddenDirectory := filepath.Join(root, ".cache")
+	if err := os.Mkdir(hiddenDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	createMetadataZip(t, filepath.Join(hiddenDirectory, "hidden-2.0.0.whl"), "hidden-2.0.0.dist-info/METADATA", "Name: hidden\nVersion: 2.0.0\n\n")
+
+	paths, err := discovery.PyPIPackages(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != wheel {
+		t.Fatalf("paths = %#v, want [%q]", paths, wheel)
+	}
+}
+
 func createMetadataZip(t *testing.T, path, metadataPath, metadata string) {
 	t.Helper()
 	file, err := os.Create(path)

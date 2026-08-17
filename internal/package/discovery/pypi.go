@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	pypihandler "packagespublisher/internal/package/formats/pypi"
 )
@@ -16,7 +17,7 @@ func PyPIPackages(root string) ([]string, error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() && entry.Name() == ".git" {
+		if path != root && entry.IsDir() && strings.HasPrefix(entry.Name(), ".") {
 			return filepath.SkipDir
 		}
 		if entry.IsDir() || !pypihandler.IsDistribution(entry.Name()) {
