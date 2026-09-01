@@ -127,7 +127,7 @@ func TestRunOutputCSVWritesSingleResultToStdout(t *testing.T) {
 	packagePath := filepath.Join(root, "demo-1.0.0.tgz")
 	createNPMTarball(t, packagePath, `{"name":"demo","version":"1.0.0"}`)
 	configPath := filepath.Join(root, "publisher.yaml")
-	configData := fmt.Sprintf("package:\n  path: %q\n  format: npm\n  publish_driver: npm_cli\n", packagePath)
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: npm\n  publish_driver: npm_cli\nmetadata:\n  correlation_id: single-001\n", packagePath)
 	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,10 @@ func TestRunOutputCSVWritesSingleResultToStdout(t *testing.T) {
 		t.Fatalf("CSV record count = %d, want 2: %#v", len(records), records)
 	}
 	result := csvRecord(records[0], records[1])
-	if result["sourceFile"] != packagePath || result["status"] != "SUCCESS" {
+	if result["correlationId"] != "single-001" || result["status"] != "SUCCESS" ||
+		result["format"] != "npm" || result["name"] != "demo" ||
+		result["version"] != "1.0.0" || result["fileName"] != filepath.Base(packagePath) ||
+		result["filePath"] != packagePath || result["fileSha256"] == "" {
 		t.Fatalf("unexpected CSV result: %#v", result)
 	}
 }
@@ -197,11 +200,11 @@ func TestRunOutputCSVWritesBatchResultFile(t *testing.T) {
 		createNPMTarball(t, path, fmt.Sprintf(`{"name":"demo-%d","version":"%d.0.0"}`, index, index))
 	}
 	configPath := filepath.Join(root, "publisher.yaml")
-	configData := fmt.Sprintf("package:\n  path: %q\n  format: npm\n  publish_driver: npm_cli\n  recursive: true\n", packagesPath)
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: npm\n  publish_driver: npm_cli\n  recursive: true\nmetadata:\n  correlation_id: batch-001\n", packagesPath)
 	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	resultPath := filepath.Join(root, "publish-result.csv")
+	resultPath := filepath.Join(root, "pkgfiles.csv")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -226,9 +229,16 @@ func TestRunOutputCSVWritesBatchResultFile(t *testing.T) {
 	if len(records) != 3 {
 		t.Fatalf("CSV record count = %d, want 3: %#v", len(records), records)
 	}
-	for _, record := range records[1:] {
+	for index, record := range records[1:] {
 		result := csvRecord(records[0], record)
-		if !strings.HasPrefix(result["sourceFile"], packagesPath+string(filepath.Separator)) || result["status"] != "SUCCESS" {
+		wantName := fmt.Sprintf("demo-%d", index+1)
+		wantVersion := fmt.Sprintf("%d.0.0", index+1)
+		wantFileName := fmt.Sprintf("demo-%d.0.0.tgz", index+1)
+		wantFilePath := filepath.Join(packagesPath, wantFileName)
+		if result["correlationId"] != "batch-001" || result["status"] != "SUCCESS" ||
+			result["format"] != "npm" || result["name"] != wantName ||
+			result["version"] != wantVersion || result["fileName"] != wantFileName ||
+			result["filePath"] != wantFilePath || result["fileSha256"] == "" {
 			t.Fatalf("unexpected batch CSV result: %#v", result)
 		}
 	}
@@ -275,6 +285,8 @@ repositories:
     credential_ref: PRODUCTION_PAT
 options:
   dry_run: true
+metadata:
+  correlation_id: production-001
 `, packagePath, server.URL)
 	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
 		t.Fatal(err)
@@ -300,7 +312,7 @@ options:
 	})
 
 	t.Run("CSV file", func(t *testing.T) {
-		resultPath := filepath.Join(root, "production-result.csv")
+		resultPath := filepath.Join(root, "pkgfiles.csv")
 		var stdout bytes.Buffer
 		var stderr bytes.Buffer
 		exitCode := Run(context.Background(), []string{
@@ -325,7 +337,10 @@ options:
 			t.Fatalf("CSV record count = %d, want 2: %#v", len(records), records)
 		}
 		result := csvRecord(records[0], records[1])
-		if result["sourceFile"] != packagePath || result["status"] != "SKIPPED" {
+		if result["correlationId"] != "production-001" || result["status"] != "SKIPPED" ||
+			result["format"] != "npm" || result["name"] != "demo" ||
+			result["version"] != "1.0.0" || result["fileName"] != filepath.Base(packagePath) ||
+			result["filePath"] != packagePath || result["fileSha256"] == "" {
 			t.Fatalf("unexpected production CSV result: %#v", result)
 		}
 	})

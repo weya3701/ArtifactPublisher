@@ -66,7 +66,7 @@ go run ./cmd/publisher publish --config publisher.yaml
   --file=publish-result.json
 
 ./package-publisher publish --config publisher.yaml --output=csv \
-  --file=publish-result.csv
+  --file=pkgfiles.csv
 ```
 
 `--output` 支援 `json` 與 `csv`，未指定時預設為 JSON。只指定 `--file` 時會依 `.json` 或 `.csv` 副檔名選擇格式；同時指定兩者時，副檔名必須與格式一致。
@@ -676,9 +676,14 @@ options:
 
 ## 13. 輸出、狀態與 Exit Code
 
-單套件輸出 `PublishResult`，批次輸出 `BatchPublishReport`。使用 `--output=json|csv` 選擇輸出格式，未指定時維持 JSON；正式發佈與 `--mode=test` 的行為相同。使用 `--file=publish-result.json` 或 `--file=publish-result.csv` 可將結果直接寫入檔案。
+單套件輸出 `PublishResult`，批次輸出 `BatchPublishReport`。使用 `--output=json|csv` 選擇輸出格式，未指定時維持 JSON；正式發佈與 `--mode=test` 的行為相同。使用 `--file=publish-result.json` 或 `--file=pkgfiles.csv` 可將結果直接寫入檔案。
 
-CSV 僅包含 `sourceFile` 與 `status` 兩欄，每個實際來源檔案各占一列。若同一套件含多個檔案（例如 PyPI 同版本的 wheel 與 sdist），每個檔案都會列出該次套件發佈狀態；若套件在檔案清單建立前即失敗，則以原始輸入路徑作為 `sourceFile`。批次彙總與完整套件資訊仍可由 JSON 輸出取得。
+CSV 用於稽核套件內的實體檔案，包含 `correlationId`、`status`、`format`、`name`、`version`、`fileName`、`filePath` 與 `fileSha256` 八欄，每個實體檔案各占一列。`status` 為該檔案所屬套件的發佈結果，可能為 `SUCCESS`、`SKIPPED` 或 `FAILED`。若同一套件含多個檔案（例如 PyPI 同版本的 wheel 與 sdist），每個檔案都會分別輸出；若套件在檔案清單建立前即失敗，CSV 只會包含標頭。批次彙總與完整套件資訊仍可由 JSON 輸出取得。
+
+```csv
+correlationId,status,format,name,version,fileName,filePath,fileSha256
+promotion-001,SUCCESS,npm,demo,1.0.0,demo-1.0.0.tgz,/packages/demo-1.0.0.tgz,abc123...
+```
 
 主要狀態：
 

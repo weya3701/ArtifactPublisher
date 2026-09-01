@@ -9,13 +9,21 @@ import (
 	"packagespublisher/internal/model"
 )
 
-func TestEncodeCSVListsEachSourceFileAndItsStatus(t *testing.T) {
+func TestEncodeCSVListsEveryPhysicalPackageFileForAuditing(t *testing.T) {
 	result := model.PublishResult{
-		Status: model.StatusSuccess,
-		Package: model.PackageDescriptor{Files: []model.PackageFile{
-			{Path: "/packages/demo-1.0.0-py3-none-any.whl"},
-			{Path: "/packages/demo-1.0.0.tar.gz"},
-		}},
+		Status:   model.StatusSuccess,
+		Metadata: model.RequestMetadata{CorrelationID: "promotion-001"},
+		Package: model.PackageDescriptor{
+			Format:  model.FormatPyPI,
+			Name:    "demo",
+			Version: "1.0.0",
+			Files: []model.PackageFile{
+				{
+					Name: "demo-1.0.0-py3-none-any.whl", Path: "/packages/demo-1.0.0-py3-none-any.whl", SHA256: "wheel-sha256",
+				},
+				{Name: "demo-1.0.0.tar.gz", Path: "/packages/demo-1.0.0.tar.gz", SHA256: "sdist-sha256"},
+			},
+		},
 	}
 
 	var output bytes.Buffer
@@ -27,16 +35,22 @@ func TestEncodeCSVListsEachSourceFileAndItsStatus(t *testing.T) {
 		t.Fatalf("decode CSV: %v", err)
 	}
 	want := [][]string{
-		{"sourceFile", "status"},
-		{"/packages/demo-1.0.0-py3-none-any.whl", "SUCCESS"},
-		{"/packages/demo-1.0.0.tar.gz", "SUCCESS"},
+		{"correlationId", "status", "format", "name", "version", "fileName", "filePath", "fileSha256"},
+		{
+			"promotion-001", "SUCCESS", "pypi", "demo", "1.0.0",
+			"demo-1.0.0-py3-none-any.whl", "/packages/demo-1.0.0-py3-none-any.whl", "wheel-sha256",
+		},
+		{
+			"promotion-001", "SUCCESS", "pypi", "demo", "1.0.0",
+			"demo-1.0.0.tar.gz", "/packages/demo-1.0.0.tar.gz", "sdist-sha256",
+		},
 	}
 	if !reflect.DeepEqual(records, want) {
 		t.Fatalf("CSV records = %#v, want %#v", records, want)
 	}
 }
 
-func TestEncodeCSVUsesInputPathWhenPackageFilesAreUnavailable(t *testing.T) {
+func TestEncodeCSVWritesOnlyHeaderWhenPackageFilesAreUnavailable(t *testing.T) {
 	result := model.PublishResult{
 		Status:    model.StatusFailed,
 		InputPath: "/packages/broken.whl",
@@ -51,8 +65,7 @@ func TestEncodeCSVUsesInputPathWhenPackageFilesAreUnavailable(t *testing.T) {
 		t.Fatalf("decode CSV: %v", err)
 	}
 	want := [][]string{
-		{"sourceFile", "status"},
-		{"/packages/broken.whl", "FAILED"},
+		{"correlationId", "status", "format", "name", "version", "fileName", "filePath", "fileSha256"},
 	}
 	if !reflect.DeepEqual(records, want) {
 		t.Fatalf("CSV records = %#v, want %#v", records, want)
