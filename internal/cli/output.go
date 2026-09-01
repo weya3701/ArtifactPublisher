@@ -73,11 +73,13 @@ func (o resultOutput) Write(value any) error {
 	return nil
 }
 
-var sourceFileCSVHeader = []string{"sourceFile", "status"}
+var packageFileCSVHeader = []string{
+	"correlationId", "status", "format", "name", "version", "fileName", "filePath", "fileSha256",
+}
 
 func encodeCSV(output io.Writer, value any) error {
 	writer := csv.NewWriter(output)
-	if err := writer.Write(sourceFileCSVHeader); err != nil {
+	if err := writer.Write(packageFileCSVHeader); err != nil {
 		return err
 	}
 	switch report := value.(type) {
@@ -103,17 +105,18 @@ func encodeCSV(output io.Writer, value any) error {
 }
 
 func publishResultCSVRows(result model.PublishResult) [][]string {
-	status := string(result.Status)
-	if len(result.Package.Files) == 0 {
-		return [][]string{{result.InputPath, status}}
-	}
 	rows := make([][]string, 0, len(result.Package.Files))
 	for _, file := range result.Package.Files {
-		sourceFile := file.Path
-		if sourceFile == "" {
-			sourceFile = file.Name
-		}
-		rows = append(rows, []string{sourceFile, status})
+		rows = append(rows, []string{
+			result.Metadata.CorrelationID,
+			string(result.Status),
+			string(result.Package.Format),
+			result.Package.Name,
+			result.Package.Version,
+			file.Name,
+			file.Path,
+			file.SHA256,
+		})
 	}
 	return rows
 }
