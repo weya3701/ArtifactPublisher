@@ -164,6 +164,7 @@ metadata:
 | `format` | 是 | `maven`、`npm`、`pypi` |
 | `publish_driver` | 是 | Maven=`maven_cli`、npm=`npm_cli`、PyPI=`twine` |
 | `recursive` | 否 | `true` 表示遞迴探索並採批次模式 |
+| `exclude` | 否 | 探索時略過的目錄清單；路徑相對於套件根目錄 |
 | `maven.*` | 條件式 | 無 metadata 的單一 JAR 所需 fallback GAV |
 | `npm.tag` | 否 | 發佈時指定 npm dist-tag |
 
@@ -184,6 +185,23 @@ package:
 ```
 
 環境變數未設定、名稱格式錯誤或值為空時，Publisher 會回報 configuration error。建議使用絕對路徑，尤其是 npm package directory 或 `node_modules`。`credential_ref` 不使用 `${VAR}`，仍應直接填入保存 credential 的環境變數名稱。
+
+若要讓套件探索略過特定目錄，可設定 `exclude`：
+
+```yaml
+package:
+  path: ./downloaded-packages
+  format: maven
+  publish_driver: maven_cli
+  recursive: true
+  exclude:
+    - quarantine
+    - cache/legacy
+```
+
+每個項目都是相對於 `package.path` 的精確目錄路徑；被指定的目錄及其所有子目錄都不會被掃描。此欄位不支援 glob，也不可使用絕對路徑、`..` 或代表套件根目錄的 `.`。指定不存在的目錄不會造成錯誤。若使用 `archive_path`，則路徑相對於封裝檔解壓後的根目錄，排除內容也不會寫入暫存目錄。
+
+`exclude` 會影響 Maven、npm 與 PyPI 的套件探索及外層封裝檔的解壓，但不會改變單一套件的內容。若要排除 npm 套件內的檔案，應使用 `.npmignore` 或 `package.json` 的 `files` 欄位。
 
 ### 4.2 `repository_profile` 與 `repositories`
 
@@ -591,7 +609,7 @@ package:
   recursive: true
 ```
 
-支援 `.zip`、`.tar`、`.tar.gz`、`.tgz`。工具會解壓至暫存目錄、執行探索及發佈，結束後清除暫存內容。解壓時會直接略過 `._*`、`.DS_Store` 與 `__MACOSX` 內的 macOS metadata，不會將它們寫入暫存目錄。
+支援 `.zip`、`.tar`、`.tar.gz`、`.tgz`。工具會解壓至暫存目錄、執行探索及發佈，結束後清除暫存內容。解壓時會直接略過 `._*`、`.DS_Store`、`__MACOSX` 內的 macOS metadata，以及 `package.exclude` 指定的目錄，不會將它們寫入暫存目錄。排除目錄內的符號連結或特殊檔案不會觸發安全檢查錯誤；未排除位置的符號連結仍會被拒絕。
 
 `archive_path` 是包住套件的外層封裝。若 npm `.tgz` 或 PyPI `.zip` 本身就是要發佈的套件，仍應使用 `path`：
 

@@ -10,12 +10,19 @@ import (
 	pypihandler "packagespublisher/internal/package/formats/pypi"
 )
 
-func PyPIPackages(root string) ([]string, error) {
+func PyPIPackages(root string, excludedDirectories ...string) ([]string, error) {
 	root = filepath.Clean(root)
+	excluded, err := prepareExcludedDirectories(excludedDirectories)
+	if err != nil {
+		return nil, fmt.Errorf("discover PyPI packages under %q: %w", root, err)
+	}
 	selected := make(map[string]string)
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry.IsDir() && isExcludedDirectory(root, path, excluded) {
+			return filepath.SkipDir
 		}
 		if path != root && entry.IsDir() && strings.HasPrefix(entry.Name(), ".") {
 			return filepath.SkipDir

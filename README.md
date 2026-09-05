@@ -59,6 +59,9 @@ package:
   format: maven
   publish_driver: maven_cli
   recursive: true
+  exclude:
+    - quarantine
+    - cache/legacy
 
 repository_profile: internal-packages
 
@@ -158,6 +161,7 @@ go build -o package-publisher ./cmd/publisher
 | `format` | 是 | `maven`、`npm`、`pypi` |
 | `publish_driver` | 是 | 必須與 format 對應 |
 | `recursive` | 否 | 遞迴探索並啟用 Batch Publish |
+| `exclude` | 否 | 探索時略過的目錄清單；路徑相對於套件根目錄 |
 | `maven.group_id` | 條件式 | JAR 沒有內嵌 Maven metadata 時使用 |
 | `maven.artifact_id` | 條件式 | 必須與另外兩個 Maven fallback 欄位一起設定 |
 | `maven.version` | 條件式 | 必須與另外兩個 Maven fallback 欄位一起設定 |
@@ -178,6 +182,21 @@ package:
 
 環境變數必須已設定且不可為空；建議 `PACKAGE_ROOT` 使用絕對路徑。此功能不會展開 `credential_ref`，PAT 與密碼仍只填環境變數名稱。
 
+`exclude` 可在 Publisher 探索套件時略過指定目錄及其所有子目錄：
+
+```yaml
+package:
+  path: ./downloaded-packages
+  format: npm
+  publish_driver: npm_cli
+  recursive: true
+  exclude:
+    - quarantine
+    - cache/legacy
+```
+
+每個項目都是相對於 `package.path` 的精確目錄路徑，不支援 glob；不可使用絕對路徑、`..` 或 `.`。使用 `archive_path` 時，路徑改為相對於封裝檔解壓後的根目錄，而且被排除的內容不會寫入暫存目錄。不存在的目錄不會造成錯誤。此設定不會排除單一 npm 套件內的檔案；後者應使用 `.npmignore` 或 `package.json` 的 `files` 欄位。
+
 ### 封裝壓縮檔
 
 若掃描或核准流程將多個套件封裝為單一壓縮檔，可使用
@@ -195,6 +214,7 @@ Publisher 會將封裝檔解壓至暫存目錄，再沿用既有的套件探索�
 Batch Publish 流程；執行結束後會移除暫存內容。為避免 Zip Slip 等攻擊，
 壓縮檔內的絕對路徑、上層路徑、符號連結及特殊檔案都會被拒絕。
 解壓時會直接略過 `._*`、`.DS_Store` 與 `__MACOSX` 內的 macOS metadata，不會將它們寫入暫存目錄。
+`package.exclude` 指定的目錄也會在解壓時略過，因此排除目錄內的符號連結或特殊檔案不會觸發封裝檔安全檢查錯誤；未排除位置的符號連結仍會被拒絕。
 
 `archive_path` 表示包住套件的「外層封裝」，不能和 `path` 同時設定。
 npm 的 `.tgz` 或 PyPI 的 `.zip` 若本身就是待發佈套件，仍應使用 `path`。

@@ -18,6 +18,9 @@ package:
   path: ./artifacts
   format: npm
   publish_driver: npm_cli
+  exclude:
+    - cache
+    - vendor/legacy
   npm:
     tag: legacy
 repository_profile: internal-maven
@@ -52,6 +55,9 @@ metadata:
 	}
 	if options.NPMTag != "legacy" {
 		t.Fatalf("npm tag = %q; want legacy", options.NPMTag)
+	}
+	if len(loaded.Package.Exclude) != 2 || loaded.Package.Exclude[0] != "cache" || loaded.Package.Exclude[1] != "vendor/legacy" {
+		t.Fatalf("package exclude = %#v", loaded.Package.Exclude)
 	}
 	if loaded.Metadata.CorrelationID != "correlation-1" {
 		t.Fatalf("metadata not parsed: %+v", loaded.Metadata)
@@ -279,5 +285,30 @@ func TestValidateRejectsPathAndArchivePathTogether(t *testing.T) {
 	err := configValue.ValidateForMode(config.PublishModeTest)
 	if err == nil || !strings.Contains(err.Error(), "cannot be configured together") {
 		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateRejectsInvalidExcludedDirectories(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		directory string
+		message   string
+	}{
+		{name: "empty", directory: "", message: "cannot be empty"},
+		{name: "package root", directory: ".", message: "cannot exclude the package root"},
+		{name: "absolute", directory: string(filepath.Separator) + "tmp", message: "must be a relative directory"},
+		{name: "outside root", directory: "../outside", message: "must be a relative directory"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			configValue := config.Config{
+				Package: config.PackageConfig{
+					Path: "packages", Format: "npm", PublishDriver: "npm_cli", Exclude: []string{testCase.directory},
+				},
+			}
+			err := configValue.ValidateForMode(config.PublishModeTest)
+			if err == nil || !strings.Contains(err.Error(), testCase.message) {
+				t.Fatalf("ValidateForMode() error = %v, want message containing %q", err, testCase.message)
+			}
+		})
 	}
 }

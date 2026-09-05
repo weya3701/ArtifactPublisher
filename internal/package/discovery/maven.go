@@ -10,15 +10,23 @@ import (
 
 // MavenPackages returns directories containing one POM, or one main JAR when
 // no POM exists. A directory is one independently publishable package version.
-func MavenPackages(root string) ([]string, error) {
+func MavenPackages(root string, excludedDirectories ...string) ([]string, error) {
 	type directoryFiles struct {
 		poms     int
 		mainJars int
 	}
+	root = filepath.Clean(root)
+	excluded, err := prepareExcludedDirectories(excludedDirectories)
+	if err != nil {
+		return nil, fmt.Errorf("discover Maven packages under %q: %w", root, err)
+	}
 	directories := make(map[string]*directoryFiles)
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry.IsDir() && isExcludedDirectory(root, path, excluded) {
+			return filepath.SkipDir
 		}
 		if entry.IsDir() {
 			return nil

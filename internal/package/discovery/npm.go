@@ -15,15 +15,22 @@ type npmIdentity struct {
 	Version string `json:"version"`
 }
 
-func NPMPackages(root string) ([]string, error) {
+func NPMPackages(root string, excludedDirectories ...string) ([]string, error) {
 	root = filepath.Clean(root)
+	excluded, err := prepareExcludedDirectories(excludedDirectories)
+	if err != nil {
+		return nil, fmt.Errorf("discover npm packages under %q: %w", root, err)
+	}
 	var tarballs []string
 	var installedDirectories []string
 	packageDirectories := make(map[string]bool)
 	tarballDirectories := make(map[string]bool)
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if entry.IsDir() && isExcludedDirectory(root, path, excluded) {
+			return filepath.SkipDir
 		}
 		if entry.IsDir() && entry.Name() == ".git" {
 			return filepath.SkipDir

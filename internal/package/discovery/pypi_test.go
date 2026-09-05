@@ -49,6 +49,28 @@ func TestPyPIPackagesIgnoresHiddenFilesAndDirectories(t *testing.T) {
 	}
 }
 
+func TestPyPIPackagesExcludesConfiguredDirectoryTree(t *testing.T) {
+	root := t.TempDir()
+	included := filepath.Join(root, "approved", "included-1.0.0-py3-none-any.whl")
+	excluded := filepath.Join(root, "quarantine", "nested", "excluded-2.0.0-py3-none-any.whl")
+	if err := os.MkdirAll(filepath.Dir(included), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(excluded), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	createMetadataZip(t, included, "included-1.0.0.dist-info/METADATA", "Name: included\nVersion: 1.0.0\n\n")
+	createMetadataZip(t, excluded, "excluded-2.0.0.dist-info/METADATA", "Name: excluded\nVersion: 2.0.0\n\n")
+
+	paths, err := discovery.PyPIPackages(root, "quarantine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != included {
+		t.Fatalf("paths = %#v, want [%q]", paths, included)
+	}
+}
+
 func createMetadataZip(t *testing.T, path, metadataPath, metadata string) {
 	t.Helper()
 	file, err := os.Create(path)

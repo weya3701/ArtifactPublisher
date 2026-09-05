@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -119,6 +120,97 @@ func TestRunVerboseReportsBatchProgress(t *testing.T) {
 		if !strings.Contains(stderr.String(), expected) {
 			t.Fatalf("stderr does not contain %q: %s", expected, stderr.String())
 		}
+	}
+}
+
+func TestRunRecursivePublishExcludesConfiguredDirectory(t *testing.T) {
+	root := t.TempDir()
+	packagesPath := filepath.Join(root, "packages")
+	includedPath := filepath.Join(packagesPath, "approved", "included-1.0.0.tgz")
+	excludedPath := filepath.Join(packagesPath, "quarantine", "excluded-2.0.0.tgz")
+	if err := os.MkdirAll(filepath.Dir(includedPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(excludedPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	createNPMTarball(t, includedPath, `{"name":"included","version":"1.0.0"}`)
+	createNPMTarball(t, excludedPath, `{"name":"excluded","version":"2.0.0"}`)
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: npm\n  publish_driver: npm_cli\n  recursive: true\n  exclude:\n    - quarantine\n", packagesPath)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	var report model.BatchPublishReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("decode batch report: %v", err)
+	}
+	if report.Total != 1 || report.Succeeded != 1 || len(report.Results) != 1 || report.Results[0].Package.Name != "included" {
+		t.Fatalf("unexpected batch report: %+v", report)
+	}
+}
+
+func TestRunArchivePublishSkipsExcludedDirectoryContainingSymlink(t *testing.T) {
+	root := t.TempDir()
+	packagePath := filepath.Join(root, "included-1.0.0.tgz")
+	createNPMTarball(t, packagePath, `{"name":"included","version":"1.0.0"}`)
+	packageContents, err := os.ReadFile(packagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	archivePath := filepath.Join(root, "approved-packages.zip")
+	archiveFile, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archiveWriter := zip.NewWriter(archiveFile)
+	entry, err := archiveWriter.Create("artifactNPM/included-1.0.0.tgz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write(packageContents); err != nil {
+		t.Fatal(err)
+	}
+	linkHeader := &zip.FileHeader{Name: "artifactNPM/.bin/nanoid"}
+	linkHeader.SetMode(os.ModeSymlink | 0o777)
+	link, err := archiveWriter.CreateHeader(linkHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = link.Write([]byte("../nanoid/bin/nanoid.cjs"))
+	if err := archiveWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := archiveFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  archive_path: %q\n  format: npm\n  publish_driver: npm_cli\n  recursive: true\n  exclude:\n    - artifactNPM/.bin\n", archivePath)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	var report model.BatchPublishReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("decode batch report: %v", err)
+	}
+	if report.Total != 1 || report.Succeeded != 1 || len(report.Results) != 1 || report.Results[0].Package.Name != "included" {
+		t.Fatalf("unexpected batch report: %+v", report)
 	}
 }
 

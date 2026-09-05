@@ -129,3 +129,114 @@ func TestExtractRejectsPathTraversal(t *testing.T) {
 		t.Fatalf("Extract() error = %v", err)
 	}
 }
+
+func TestExtractZIPSkipsExcludedDirectoryContainingSymlink(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "packages.zip")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	entry, err := writer.Create("artifactNPM/demo-1.0.0.tgz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = entry.Write([]byte("package"))
+	linkHeader := &zip.FileHeader{Name: "artifactNPM/.bin/nanoid"}
+	linkHeader.SetMode(os.ModeSymlink | 0o777)
+	link, err := writer.CreateHeader(linkHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = link.Write([]byte("../nanoid/bin/nanoid.cjs"))
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	directory, cleanup, err := archive.ExtractWithExclusions(path, []string{"artifactNPM/.bin"})
+	if err != nil {
+		t.Fatalf("ExtractWithExclusions() error = %v", err)
+	}
+	defer cleanup()
+	if _, err := os.Stat(filepath.Join(directory, "artifactNPM", "demo-1.0.0.tgz")); err != nil {
+		t.Fatalf("included package was not extracted: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(directory, "artifactNPM", ".bin")); !os.IsNotExist(err) {
+		t.Fatalf("excluded directory was extracted: %v", err)
+	}
+}
+
+func TestExtractTarGZIPSkipsExcludedDirectoryContainingSymlink(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "packages.tar.gz")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gzipWriter := gzip.NewWriter(file)
+	writer := tar.NewWriter(gzipWriter)
+	content := []byte("package")
+	if err := writer.WriteHeader(&tar.Header{
+		Name: "artifactNPM/demo-1.0.0.tgz", Mode: 0o644, Size: int64(len(content)), Typeflag: tar.TypeReg,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteHeader(&tar.Header{
+		Name: "artifactNPM/.bin/nanoid", Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: "../nanoid/bin/nanoid.cjs",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	directory, cleanup, err := archive.ExtractWithExclusions(path, []string{"artifactNPM/.bin"})
+	if err != nil {
+		t.Fatalf("ExtractWithExclusions() error = %v", err)
+	}
+	defer cleanup()
+	if _, err := os.Stat(filepath.Join(directory, "artifactNPM", "demo-1.0.0.tgz")); err != nil {
+		t.Fatalf("included package was not extracted: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(directory, "artifactNPM", ".bin")); !os.IsNotExist(err) {
+		t.Fatalf("excluded directory was extracted: %v", err)
+	}
+}
+
+func TestExtractStillRejectsNonExcludedSymbolicLink(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "packages.zip")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	linkHeader := &zip.FileHeader{Name: "artifactNPM/.bin/nanoid"}
+	linkHeader.SetMode(os.ModeSymlink | 0o777)
+	link, err := writer.CreateHeader(linkHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = link.Write([]byte("../nanoid/bin/nanoid.cjs"))
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = archive.Extract(path)
+	if err == nil || !strings.Contains(err.Error(), "unsupported symbolic link") {
+		t.Fatalf("Extract() error = %v", err)
+	}
+}

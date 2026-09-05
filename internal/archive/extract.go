@@ -14,6 +14,12 @@ import (
 // Extract expands a publisher bundle into a temporary directory. The caller
 // must invoke the returned cleanup function when the publish run finishes.
 func Extract(path string) (directory string, cleanup func(), err error) {
+	return ExtractWithExclusions(path, nil)
+}
+
+// ExtractWithExclusions expands a publisher bundle while omitting configured
+// directory trees. Excluded directories are relative to the archive root.
+func ExtractWithExclusions(path string, excludedDirectories []string) (directory string, cleanup func(), err error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", nil, fmt.Errorf("inspect package archive %q: %w", path, err)
@@ -21,23 +27,27 @@ func Extract(path string) (directory string, cleanup func(), err error) {
 	if !info.Mode().IsRegular() {
 		return "", nil, fmt.Errorf("package archive %q must be a regular file", path)
 	}
+	excluded, err := prepareExcludedDirectories(excludedDirectories)
+	if err != nil {
+		return "", nil, err
+	}
 	directory, err = os.MkdirTemp("", "package-publisher-archive-")
 	if err != nil {
 		return "", nil, fmt.Errorf("create archive workspace: %w", err)
 	}
 	cleanup = func() { _ = os.RemoveAll(directory) }
-	if err := extract(path, directory); err != nil {
+	if err := extract(path, directory, excluded); err != nil {
 		cleanup()
 		return "", nil, err
 	}
 	return directory, cleanup, nil
 }
 
-func extract(path, destination string) error {
+func extract(path, destination string, excluded map[string]struct{}) error {
 	lower := strings.ToLower(path)
 	switch {
 	case strings.HasSuffix(lower, ".zip"):
-		return extractZIP(path, destination)
+		return extractZIP(path, destination, excluded)
 	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
 		file, err := os.Open(path)
 		if err != nil {
@@ -49,20 +59,20 @@ func extract(path, destination string) error {
 			return fmt.Errorf("read gzip package archive: %w", err)
 		}
 		defer reader.Close()
-		return extractTAR(tar.NewReader(reader), destination)
+		return extractTAR(tar.NewReader(reader), destination, excluded)
 	case strings.HasSuffix(lower, ".tar"):
 		file, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("open package archive: %w", err)
 		}
 		defer file.Close()
-		return extractTAR(tar.NewReader(file), destination)
+		return extractTAR(tar.NewReader(file), destination, excluded)
 	default:
 		return fmt.Errorf("unsupported package archive %q; supported extensions are .zip, .tar, .tar.gz and .tgz", path)
 	}
 }
 
-func extractZIP(path, destination string) error {
+func extractZIP(path, destination string, excluded map[string]struct{}) error {
 	reader, err := zip.OpenReader(path)
 	if err != nil {
 		return fmt.Errorf("read ZIP package archive: %w", err)
@@ -73,7 +83,7 @@ func extractZIP(path, destination string) error {
 		if err != nil {
 			return err
 		}
-		if isMacOSMetadata(entry.Name) {
+		if isMacOSMetadata(entry.Name) || isExcludedEntry(entry.Name, excluded) {
 			continue
 		}
 		mode := entry.Mode()
@@ -96,7 +106,7 @@ func extractZIP(path, destination string) error {
 	return nil
 }
 
-func extractTAR(reader *tar.Reader, destination string) error {
+func extractTAR(reader *tar.Reader, destination string, excluded map[string]struct{}) error {
 	for {
 		header, err := reader.Next()
 		if err == io.EOF {
@@ -109,7 +119,7 @@ func extractTAR(reader *tar.Reader, destination string) error {
 		if err != nil {
 			return err
 		}
-		if isMacOSMetadata(header.Name) {
+		if isMacOSMetadata(header.Name) || isExcludedEntry(header.Name, excluded) {
 			continue
 		}
 		switch header.Typeflag {
@@ -128,6 +138,37 @@ func extractTAR(reader *tar.Reader, destination string) error {
 			return fmt.Errorf("package archive contains unsupported link or special entry %q", header.Name)
 		}
 	}
+}
+
+func prepareExcludedDirectories(directories []string) (map[string]struct{}, error) {
+	excluded := make(map[string]struct{}, len(directories))
+	for _, directory := range directories {
+		if strings.TrimSpace(directory) == "" {
+			return nil, fmt.Errorf("excluded archive directory cannot be empty")
+		}
+		clean := filepath.Clean(filepath.FromSlash(directory))
+		if clean == "." {
+			return nil, fmt.Errorf("excluded archive directory %q cannot be the archive root", directory)
+		}
+		if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("excluded archive directory %q must be relative to the archive root", directory)
+		}
+		excluded[clean] = struct{}{}
+	}
+	return excluded, nil
+}
+
+func isExcludedEntry(name string, excluded map[string]struct{}) bool {
+	if len(excluded) == 0 {
+		return false
+	}
+	clean := filepath.Clean(filepath.FromSlash(name))
+	for directory := range excluded {
+		if clean == directory || strings.HasPrefix(clean, directory+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func isMacOSMetadata(name string) bool {

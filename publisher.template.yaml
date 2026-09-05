@@ -5,6 +5,10 @@ package:
   format: {{ format }}
   publish_driver: {{ driver }}
   recursive: true
+  # Paths are relative to package.path (or the extracted archive root).
+  # exclude:
+  #   - quarantine
+  #   - cache/legacy
 
 repository_profile: {{ profile }}
 

@@ -61,7 +61,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	cleanup := func() {}
 	if loaded.Package.ArchivePath != "" {
 		progress.Printf("extracting archive: %s", loaded.Package.ArchivePath)
-		loaded.Package.Path, cleanup, err = extractArchive(loaded.Package.ArchivePath)
+		loaded.Package.Path, cleanup, err = extractArchive(loaded.Package.ArchivePath, loaded.Package.Exclude)
 		if err != nil {
 			progress.Printf("archive extraction failed: %v", err)
 			writeFailure(resultDestination, stderr, "PACKAGE", err)
@@ -99,7 +99,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-var extractArchive = archive.Extract
+var extractArchive = archive.ExtractWithExclusions
 
 func runBatch(ctx context.Context, loaded config.Config, paths []string, mode config.PublishMode, output resultOutput, stderr io.Writer, progress *progressReporter) int {
 	parallelism := loaded.Options.Parallelism
@@ -157,7 +157,7 @@ func runBatch(ctx context.Context, loaded config.Config, paths []string, mode co
 
 func resolveBatchMode(loaded config.Config) ([]string, bool, error) {
 	if loaded.Package.Recursive {
-		paths, err := discoverPackages(loaded.Package.Format, loaded.Package.Path)
+		paths, err := discoverPackages(loaded.Package.Format, loaded.Package.Path, loaded.Package.Exclude)
 		return paths, true, err
 	}
 	info, err := os.Stat(loaded.Package.Path)
@@ -176,13 +176,13 @@ func resolveBatchMode(loaded config.Config) ([]string, bool, error) {
 		if loaded.Package.Format == string(model.FormatMaven) {
 			return nil, false, nil
 		}
-		paths, err := discoverPackages(loaded.Package.Format, loaded.Package.Path)
+		paths, err := discoverPackages(loaded.Package.Format, loaded.Package.Path, loaded.Package.Exclude)
 		if err == nil && len(paths) > 1 {
 			return paths, true, nil
 		}
 		return nil, false, nil
 	}
-	paths, err := discoverPackages(loaded.Package.Format, loaded.Package.Path)
+	paths, err := discoverPackages(loaded.Package.Format, loaded.Package.Path, loaded.Package.Exclude)
 	if err != nil {
 		return nil, false, err
 	}
@@ -196,14 +196,14 @@ func resolveBatchMode(loaded config.Config) ([]string, bool, error) {
 	return paths, true, nil
 }
 
-func discoverPackages(format, root string) ([]string, error) {
+func discoverPackages(format, root string, excludedDirectories []string) ([]string, error) {
 	if format == string(model.FormatNPM) {
-		return discovery.NPMPackages(root)
+		return discovery.NPMPackages(root, excludedDirectories...)
 	}
 	if format == string(model.FormatPyPI) {
-		return discovery.PyPIPackages(root)
+		return discovery.PyPIPackages(root, excludedDirectories...)
 	}
-	return discovery.MavenPackages(root)
+	return discovery.MavenPackages(root, excludedDirectories...)
 }
 
 func writeFailure(output resultOutput, stderr io.Writer, errorType string, err error) {

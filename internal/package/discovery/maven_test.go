@@ -59,6 +59,28 @@ func TestMavenPackagesDiscoversJAROnlyDirectory(t *testing.T) {
 	}
 }
 
+func TestMavenPackagesExcludesConfiguredDirectoryTree(t *testing.T) {
+	root := t.TempDir()
+	included := filepath.Join(root, "com", "example", "included", "1.0.0")
+	excluded := filepath.Join(root, "quarantine", "com", "example", "excluded", "1.0.0")
+	for _, directory := range []string{included, excluded} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "package.pom"), []byte("<project/>"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	paths, err := discovery.MavenPackages(root, "quarantine")
+	if err != nil {
+		t.Fatalf("MavenPackages() error = %v", err)
+	}
+	if len(paths) != 1 || paths[0] != included {
+		t.Fatalf("paths = %#v, want [%q]", paths, included)
+	}
+}
+
 func TestNPMPackagesDiscoversTarballsInStableOrder(t *testing.T) {
 	root := t.TempDir()
 	second := filepath.Join(root, "z", "z-2.0.0.tgz")
@@ -111,5 +133,27 @@ func TestNPMPackagesDiscoversAndDeduplicatesInstalledDependencies(t *testing.T) 
 	}
 	if len(paths) != len(want) || paths[0] != want[0] || paths[1] != want[1] {
 		t.Fatalf("paths = %#v, want %#v", paths, want)
+	}
+}
+
+func TestNPMPackagesExcludesConfiguredDirectoryTree(t *testing.T) {
+	root := t.TempDir()
+	included := filepath.Join(root, "approved", "included-1.0.0.tgz")
+	excluded := filepath.Join(root, "quarantine", "nested", "excluded-1.0.0.tgz")
+	for _, path := range []string{included, excluded} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("tgz"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	paths, err := discovery.NPMPackages(root, "quarantine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != included {
+		t.Fatalf("paths = %#v, want [%q]", paths, included)
 	}
 }

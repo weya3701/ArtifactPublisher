@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -28,6 +29,7 @@ type PackageConfig struct {
 	Format        string             `yaml:"format"`
 	PublishDriver string             `yaml:"publish_driver"`
 	Recursive     bool               `yaml:"recursive"`
+	Exclude       []string           `yaml:"exclude"`
 	Maven         MavenPackageConfig `yaml:"maven"`
 	NPM           NPMPackageConfig   `yaml:"npm"`
 }
@@ -139,6 +141,9 @@ func (c Config) ValidateForMode(mode PublishMode) error {
 	if c.Package.Path != "" && c.Package.ArchivePath != "" {
 		return fmt.Errorf("package.path and package.archive_path cannot be configured together")
 	}
+	if err := validateExcludedDirectories(c.Package.Exclude); err != nil {
+		return err
+	}
 	switch c.Package.Format {
 	case string(model.FormatMaven):
 		if c.Package.PublishDriver != "maven_cli" {
@@ -198,6 +203,22 @@ func (c Config) ValidateForMode(mode PublishMode) error {
 		return fmt.Errorf("unsupported repository provider %q; supported providers are ado and nexus", profile.Provider)
 	}
 	return c.validateOptions()
+}
+
+func validateExcludedDirectories(directories []string) error {
+	for index, directory := range directories {
+		if strings.TrimSpace(directory) == "" {
+			return fmt.Errorf("package.exclude[%d] cannot be empty", index)
+		}
+		clean := filepath.Clean(filepath.FromSlash(directory))
+		if clean == "." {
+			return fmt.Errorf("package.exclude[%d] cannot exclude the package root", index)
+		}
+		if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("package.exclude[%d] must be a relative directory below the package root", index)
+		}
+	}
+	return nil
 }
 
 func (c Config) validateOptions() error {
