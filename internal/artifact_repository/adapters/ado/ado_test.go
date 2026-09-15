@@ -2,6 +2,7 @@ package ado_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,101 @@ import (
 	"packagespublisher/internal/model"
 	mavenhandler "packagespublisher/internal/package/formats/maven"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
+
+func TestRepositoryUsesDefaultAzureEndpoints(t *testing.T) {
+	repository := ado.New(ado.Config{
+		Organization: "my org", Project: "platform", Feed: "approved",
+		Credential: credential.PersonalAccessToken{Token: "pat"},
+	})
+
+	if got := repository.Context().QueryEndpoint; got != "https://feeds.dev.azure.com/my%20org" {
+		t.Fatalf("query endpoint = %q", got)
+	}
+	endpoint, err := repository.ResolveEndpoint(model.FormatNPM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://pkgs.dev.azure.com/my%20org/platform/_packaging/approved/npm/registry/"
+	if endpoint != want {
+		t.Fatalf("publish endpoint = %q, want %q", endpoint, want)
+	}
+}
+
+func TestRepositoryUsesConfiguredFeedAndPackageBaseURLs(t *testing.T) {
+	var requested []string
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requested = append(requested, request.URL.String())
+		status := http.StatusNotFound
+		if request.URL.Host == "feeds.example.test" {
+			status = http.StatusOK
+		}
+		return &http.Response{
+			StatusCode: status,
+			Body:       io.NopCloser(strings.NewReader("{}")),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})}
+	repository := ado.New(ado.Config{
+		Organization: "org", Project: "project", Feed: "feed",
+		FeedBaseURL: "https://feeds.example.test/custom-org/", PackageBaseURL: "https://packages.example.test/custom-org/",
+		Credential: credential.PersonalAccessToken{Token: "pat"}, HTTPClient: client,
+	})
+
+	if err := repository.CheckConnection(context.Background()); err != nil {
+		t.Fatalf("CheckConnection() error = %v", err)
+	}
+	exists, err := repository.CheckPackageExists(context.Background(), testDescriptor())
+	if err != nil || exists {
+		t.Fatalf("CheckPackageExists() = %v, %v; want false, nil", exists, err)
+	}
+	endpoint, err := repository.ResolveEndpoint(model.FormatMaven)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantEndpoint := "https://packages.example.test/custom-org/project/_packaging/feed/maven/v1"
+	if endpoint != wantEndpoint {
+		t.Fatalf("publish endpoint = %q, want %q", endpoint, wantEndpoint)
+	}
+	wantRequests := []string{
+		"https://feeds.example.test/custom-org/project/_apis/packaging/feeds/feed?api-version=7.1",
+		"https://packages.example.test/custom-org/project/_apis/packaging/feeds/feed/maven/groups/com.example/artifacts/demo/versions/1.0.0?api-version=7.1-preview.1",
+	}
+	if len(requested) != len(wantRequests) {
+		t.Fatalf("requests = %#v, want %#v", requested, wantRequests)
+	}
+	for index := range requested {
+		if requested[index] != wantRequests[index] {
+			t.Fatalf("request[%d] = %q, want %q", index, requested[index], wantRequests[index])
+		}
+	}
+}
+
+func TestRepositoryRejectsInvalidConfiguredBaseURLs(t *testing.T) {
+	tests := []struct {
+		name   string
+		config ado.Config
+	}{
+		{name: "feed", config: ado.Config{FeedBaseURL: "://missing-scheme"}},
+		{name: "package", config: ado.Config{PackageBaseURL: "not-a-url"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.config.Organization = "org"
+			test.config.Feed = "feed"
+			test.config.Credential = credential.PersonalAccessToken{Token: "pat"}
+			if err := ado.New(test.config).ValidateConfig(); err == nil || !strings.Contains(err.Error(), "invalid ADO") {
+				t.Fatalf("ValidateConfig() error = %v", err)
+			}
+		})
+	}
+}
 
 func TestRepositoryReadsMavenPackageAndChecksums(t *testing.T) {
 	directory := t.TempDir()

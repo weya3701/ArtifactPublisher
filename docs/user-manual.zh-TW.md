@@ -322,9 +322,32 @@ ADO profile 必填欄位：
 | `organization` | Azure DevOps organization 名稱 |
 | `project` | Project-scoped Feed 的 project；organization-scoped 留空 |
 | `feed` | Feed 名稱或 ID |
+| `feed_base_url` | 選填；Feed API 的 organization base URL |
+| `package_base_url` | 選填；套件查詢與發佈的 organization base URL |
 | `credential_ref` | 保存 PAT 的環境變數名稱 |
 
-`base_url` 通常省略。它主要供自訂或測試端點使用，正常 Azure DevOps Services 會依 `organization` 自動組合 URL。
+`feed_base_url` 與 `package_base_url` 通常省略。未設定時會依 `organization` 自動使用：
+
+```text
+https://feeds.dev.azure.com/<organization>
+https://pkgs.dev.azure.com/<organization>
+```
+
+若網路環境透過自訂網域或 proxy 存取 Azure Artifacts，可以在 profile 中分別覆寫兩個 organization base URL（不要包含 project、`_packaging`、feed 名稱或套件格式路徑）：
+
+```yaml
+repositories:
+  ado-production:
+    provider: ado
+    organization: company
+    project: platform
+    feed: approved
+    feed_base_url: https://feeds.example.com/company
+    package_base_url: https://packages.example.com/company
+    credential_ref: ADO_ARTIFACT_PAT
+```
+
+舊有 ADO profile 的 `base_url` 仍可使用，並會同時作為 Feed API 與套件端點的 fallback；新設定建議使用上述兩個獨立欄位。
 
 ## 6. Nexus Repository 設定
 

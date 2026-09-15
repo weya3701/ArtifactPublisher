@@ -14,13 +14,22 @@ import (
 	"packagespublisher/internal/model"
 )
 
+const (
+	defaultFeedBaseURL    = "https://feeds.dev.azure.com"
+	defaultPackageBaseURL = "https://pkgs.dev.azure.com"
+)
+
 type Config struct {
-	Organization string
-	Project      string
-	Feed         string
-	BaseURL      string
-	Credential   artifactrepository.Credential
-	HTTPClient   *http.Client
+	Organization   string
+	Project        string
+	Feed           string
+	FeedBaseURL    string
+	PackageBaseURL string
+	// BaseURL is kept as a shared fallback for existing callers. Prefer
+	// FeedBaseURL and PackageBaseURL when the ADO endpoints are different.
+	BaseURL    string
+	Credential artifactrepository.Credential
+	HTTPClient *http.Client
 }
 
 type Repository struct {
@@ -45,10 +54,20 @@ func (r *Repository) ValidateConfig() error {
 	if r.config.Credential == nil || r.config.Credential.Kind() != "pat" || r.config.Credential.Secret() == "" {
 		return fmt.Errorf("ADO requires a non-empty PAT credential")
 	}
-	if r.config.BaseURL != "" {
-		parsed, err := url.Parse(r.config.BaseURL)
+	for _, configuredURL := range []struct {
+		name  string
+		value string
+	}{
+		{name: "base URL", value: r.config.BaseURL},
+		{name: "feed base URL", value: r.config.FeedBaseURL},
+		{name: "package base URL", value: r.config.PackageBaseURL},
+	} {
+		if configuredURL.value == "" {
+			continue
+		}
+		parsed, err := url.Parse(configuredURL.value)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return fmt.Errorf("invalid ADO base URL")
+			return fmt.Errorf("invalid ADO %s", configuredURL.name)
 		}
 	}
 	return nil
@@ -91,10 +110,7 @@ func (r *Repository) ResolveEndpoint(format model.PackageFormat) (string, error)
 	default:
 		return "", fmt.Errorf("ADO does not support package format %q", format)
 	}
-	if r.config.BaseURL != "" {
-		return strings.TrimRight(r.config.BaseURL, "/") + r.projectPath() + "/_packaging/" + url.PathEscape(r.config.Feed) + suffix, nil
-	}
-	return "https://pkgs.dev.azure.com/" + url.PathEscape(r.config.Organization) + r.projectPath() + "/_packaging/" + url.PathEscape(r.config.Feed) + suffix, nil
+	return r.packageBase() + r.projectPath() + "/_packaging/" + url.PathEscape(r.config.Feed) + suffix, nil
 }
 
 func (r *Repository) CheckPackageExists(ctx context.Context, descriptor model.PackageDescriptor) (bool, error) {
@@ -239,17 +255,23 @@ func npmPackagePath(descriptor model.PackageDescriptor) string {
 }
 
 func (r *Repository) apiBase() string {
+	if r.config.FeedBaseURL != "" {
+		return strings.TrimRight(r.config.FeedBaseURL, "/")
+	}
 	if r.config.BaseURL != "" {
 		return strings.TrimRight(r.config.BaseURL, "/")
 	}
-	return "https://feeds.dev.azure.com/" + url.PathEscape(r.config.Organization)
+	return defaultFeedBaseURL + "/" + url.PathEscape(r.config.Organization)
 }
 
 func (r *Repository) packageBase() string {
+	if r.config.PackageBaseURL != "" {
+		return strings.TrimRight(r.config.PackageBaseURL, "/")
+	}
 	if r.config.BaseURL != "" {
 		return strings.TrimRight(r.config.BaseURL, "/")
 	}
-	return "https://pkgs.dev.azure.com/" + url.PathEscape(r.config.Organization)
+	return defaultPackageBaseURL + "/" + url.PathEscape(r.config.Organization)
 }
 
 func (r *Repository) projectPath() string {

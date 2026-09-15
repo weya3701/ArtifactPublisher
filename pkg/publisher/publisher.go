@@ -68,6 +68,7 @@ func NewNPMADOService(config NPMADOConfig) (Service, error) {
 	}
 	repository := ado.New(ado.Config{
 		Organization: config.Organization, Project: config.Project, Feed: config.Feed,
+		FeedBaseURL: config.FeedBaseURL, PackageBaseURL: config.PackageBaseURL,
 		Credential: credential.PersonalAccessToken{Token: config.PAT}, HTTPClient: config.HTTPClient,
 	})
 	if err := repository.ValidateConfig(); err != nil {
@@ -88,6 +89,8 @@ type MavenADOConfig struct {
 	Organization    string
 	Project         string
 	Feed            string
+	FeedBaseURL     string
+	PackageBaseURL  string
 	PAT             string
 	MavenExecutable string
 	HTTPClient      *http.Client
@@ -97,18 +100,22 @@ type MavenADOConfig struct {
 }
 
 type NPMADOConfig struct {
-	Organization  string
-	Project       string
-	Feed          string
-	PAT           string
-	NPMExecutable string
-	HTTPClient    *http.Client
+	Organization   string
+	Project        string
+	Feed           string
+	FeedBaseURL    string
+	PackageBaseURL string
+	PAT            string
+	NPMExecutable  string
+	HTTPClient     *http.Client
 }
 
 type PyPIADOConfig struct {
 	Organization     string
 	Project          string
 	Feed             string
+	FeedBaseURL      string
+	PackageBaseURL   string
 	PAT              string
 	PythonExecutable string
 	HTTPClient       *http.Client
@@ -120,6 +127,7 @@ func NewPyPIADOService(config PyPIADOConfig) (Service, error) {
 	}
 	repository := ado.New(ado.Config{
 		Organization: config.Organization, Project: config.Project, Feed: config.Feed,
+		FeedBaseURL: config.FeedBaseURL, PackageBaseURL: config.PackageBaseURL,
 		Credential: credential.PersonalAccessToken{Token: config.PAT}, HTTPClient: config.HTTPClient,
 	})
 	if err := repository.ValidateConfig(); err != nil {
@@ -141,11 +149,13 @@ func NewMavenADOService(config MavenADOConfig) (Service, error) {
 		return Service{}, fmt.Errorf("ADO PAT is required")
 	}
 	repository := ado.New(ado.Config{
-		Organization: config.Organization,
-		Project:      config.Project,
-		Feed:         config.Feed,
-		Credential:   credential.PersonalAccessToken{Token: config.PAT},
-		HTTPClient:   config.HTTPClient,
+		Organization:   config.Organization,
+		Project:        config.Project,
+		Feed:           config.Feed,
+		FeedBaseURL:    config.FeedBaseURL,
+		PackageBaseURL: config.PackageBaseURL,
+		Credential:     credential.PersonalAccessToken{Token: config.PAT},
+		HTTPClient:     config.HTTPClient,
 	})
 	if err := repository.ValidateConfig(); err != nil {
 		return Service{}, err

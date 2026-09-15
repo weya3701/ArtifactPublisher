@@ -26,11 +26,13 @@ func New(profile config.RepositoryConfig, secrets SecretResolver) (artifactrepos
 	switch profile.Provider {
 	case "ado":
 		repository = ado.New(ado.Config{
-			Organization: profile.Organization,
-			Project:      profile.Project,
-			Feed:         profile.Feed,
-			BaseURL:      profile.BaseURL,
-			Credential:   credential.PersonalAccessToken{Token: secret},
+			Organization:   profile.Organization,
+			Project:        profile.Project,
+			Feed:           profile.Feed,
+			FeedBaseURL:    profile.FeedBaseURL,
+			PackageBaseURL: profile.PackageBaseURL,
+			BaseURL:        profile.BaseURL,
+			Credential:     credential.PersonalAccessToken{Token: secret},
 		})
 	case "nexus":
 		repository = nexus.New(nexus.Config{

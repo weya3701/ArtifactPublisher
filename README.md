@@ -227,6 +227,8 @@ npm 的 `.tgz` 或 PyPI 的 `.zip` 若本身就是待發佈套件，仍應使用
 | `organization` | ADO | Azure DevOps organization 名稱 |
 | `project` | ADO／視 Feed 類型 | Project-scoped Feed 必填 |
 | `feed` | ADO | 既有 Azure Artifacts Feed 名稱或 ID |
+| `feed_base_url` | 否 | ADO Feed API 的 organization base URL；未設定時為 `https://feeds.dev.azure.com/<organization>` |
+| `package_base_url` | 否 | ADO 套件查詢與發佈的 organization base URL；未設定時為 `https://pkgs.dev.azure.com/<organization>` |
 | `base_url` | Nexus | Nexus server 根 URL，可包含安裝 context path |
 | `repository` | Nexus | 格式相容的 Nexus hosted repository 名稱 |
 | `username` | Nexus | Nexus 登入帳號 |

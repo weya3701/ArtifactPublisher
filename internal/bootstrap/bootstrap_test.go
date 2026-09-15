@@ -43,6 +43,35 @@ func TestBuildSelectsNexusFromRepositoryProfile(t *testing.T) {
 	}
 }
 
+func TestBuildPassesCustomADOBaseURLsFromRepositoryProfile(t *testing.T) {
+	components, err := bootstrap.Build(config.Config{
+		Package:           config.PackageConfig{Path: "package.tgz", Format: "npm", PublishDriver: "npm_cli"},
+		RepositoryProfile: "ado-npm",
+		Repositories: map[string]config.RepositoryConfig{
+			"ado-npm": {
+				Provider: "ado", Organization: "org", Project: "project", Feed: "feed",
+				FeedBaseURL: "https://feeds.example.com/org", PackageBaseURL: "https://packages.example.com/org",
+				CredentialRef: "ADO_PAT",
+			},
+		},
+	}, staticSecretResolver{secret: "pat"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	context := components.Service.Repository.Context()
+	if context.QueryEndpoint != "https://feeds.example.com/org" {
+		t.Fatalf("query endpoint = %q", context.QueryEndpoint)
+	}
+	endpoint, err := components.Service.Repository.ResolveEndpoint("npm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://packages.example.com/org/project/_packaging/feed/npm/registry/"
+	if endpoint != want {
+		t.Fatalf("publish endpoint = %q, want %q", endpoint, want)
+	}
+}
+
 func TestBuildTestModeDoesNotResolveSecrets(t *testing.T) {
 	resolver := &rejectingSecretResolver{}
 	components, err := bootstrap.BuildForMode(config.Config{

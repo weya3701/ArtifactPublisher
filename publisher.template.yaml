@@ -18,6 +18,9 @@ repositories:
     organization: {{ org }}
     project: {{ project }}
     feed: {{ repository }}
+    # Optional organization-level endpoint overrides. Azure defaults are used when omitted.
+    # feed_base_url: https://feeds.example.com/{{ org }}
+    # package_base_url: https://packages.example.com/{{ org }}
     credential_ref: {{ credential }}
 
   # Nexus profile example (use a format-compatible hosted repository):
