@@ -51,7 +51,7 @@ func TestBuildPassesCustomADOBaseURLsFromRepositoryProfile(t *testing.T) {
 			"ado-npm": {
 				Provider: "ado", Organization: "org", Project: "project", Feed: "feed",
 				FeedBaseURL: "https://feeds.example.com/org", PackageBaseURL: "https://packages.example.com/org",
-				CredentialRef: "ADO_PAT",
+				Username: "collection", CredentialRef: "ADO_PAT",
 			},
 		},
 	}, staticSecretResolver{secret: "pat"})
@@ -69,6 +69,27 @@ func TestBuildPassesCustomADOBaseURLsFromRepositoryProfile(t *testing.T) {
 	want := "https://packages.example.com/org/project/_packaging/feed/npm/registry/"
 	if endpoint != want {
 		t.Fatalf("publish endpoint = %q, want %q", endpoint, want)
+	}
+	if username := components.Service.Repository.Credential().Username(); username != "collection" {
+		t.Fatalf("credential username = %q, want %q", username, "collection")
+	}
+}
+
+func TestBuildPreservesDefaultADOUsername(t *testing.T) {
+	components, err := bootstrap.Build(config.Config{
+		Package:           config.PackageConfig{Path: "package.tgz", Format: "npm", PublishDriver: "npm_cli"},
+		RepositoryProfile: "ado-npm",
+		Repositories: map[string]config.RepositoryConfig{
+			"ado-npm": {
+				Provider: "ado", Organization: "collection", Feed: "feed", CredentialRef: "ADO_PAT",
+			},
+		},
+	}, staticSecretResolver{secret: "pat"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if username := components.Service.Repository.Credential().Username(); username != "AzureDevOps" {
+		t.Fatalf("credential username = %q, want %q", username, "AzureDevOps")
 	}
 }
 

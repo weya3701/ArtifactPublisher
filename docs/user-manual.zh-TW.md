@@ -74,7 +74,7 @@ go run ./cmd/publisher publish --config publisher.yaml
 ### 2.2 安裝各格式所需工具
 
 - Maven：安裝 `mvn`，並確認 `mvn --version` 可執行。
-- npm：安裝 Node.js 與 npm，並確認 `npm --version` 可執行。
+- npm：安裝 Node.js 與 npm；若輸入是 package directory 或 `node_modules`，需使用 npm 11 以上，並確認 `npm --version` 可執行。
 - PyPI：安裝 Python 3 與 Twine。
 
 ```bash
@@ -324,6 +324,7 @@ ADO profile 必填欄位：
 | `feed` | Feed 名稱或 ID |
 | `feed_base_url` | 選填；Feed API 的 organization base URL |
 | `package_base_url` | 選填；套件查詢與發佈的 organization base URL |
+| `username` | 選填；ADO Basic Auth username；雲端 ADO 通常不需設定，ADO Server 建議明確填 collection name |
 | `credential_ref` | 保存 PAT 的環境變數名稱 |
 
 `feed_base_url` 與 `package_base_url` 通常省略。未設定時會依 `organization` 自動使用：
@@ -344,6 +345,7 @@ repositories:
     feed: approved
     feed_base_url: https://feeds.example.com/company
     package_base_url: https://packages.example.com/company
+    username: company
     credential_ref: ADO_ARTIFACT_PAT
 ```
 
@@ -560,6 +562,7 @@ package:
 
 - `private: true` 的套件會被拒絕。
 - 輸入是 package directory 時，工具會執行 `npm pack <directory> --json --ignore-scripts`。
+- 上述目錄打包模式需要 npm 11 以上；npm 10 及更早版本無法以 `--ignore-scripts` 阻止 `prepare`，工具會在執行第三方 lifecycle script 前拒絕打包。無法升級時請改用預先建立的 `.tgz`。
 - 發佈使用 `--ignore-scripts` 與 `--provenance=false`。
 - Recursive 探索會辨識 `node_modules` 真正的套件根目錄，並依 name/version 去重。
 

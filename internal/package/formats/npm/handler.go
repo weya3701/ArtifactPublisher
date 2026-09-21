@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"packagespublisher/internal/model"
@@ -19,7 +20,20 @@ type Packer interface {
 	Pack(context.Context, string) (string, error)
 }
 
-type ExecPacker struct{ Executable string }
+type Runner interface {
+	Run(context.Context, string, ...string) ([]byte, error)
+}
+
+type ExecRunner struct{}
+
+func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
+type ExecPacker struct {
+	Executable string
+	Runner     Runner
+}
 
 type Handler struct{ Packer Packer }
 
@@ -144,7 +158,22 @@ func (p ExecPacker) Pack(ctx context.Context, directory string) (string, error) 
 	if executable == "" {
 		executable = "npm"
 	}
-	output, err := exec.CommandContext(ctx, executable, "pack", directory, "--json", "--ignore-scripts", "--pack-destination", directory).CombinedOutput()
+	runner := p.Runner
+	if runner == nil {
+		runner = ExecRunner{}
+	}
+	versionOutput, err := runner.Run(ctx, executable, "--version")
+	if err != nil {
+		return "", fmt.Errorf("determine npm version: %w (output: %s)", err, string(versionOutput))
+	}
+	version, major, err := parseNPMVersion(versionOutput)
+	if err != nil {
+		return "", err
+	}
+	if major < 11 {
+		return "", fmt.Errorf("npm 11 or newer is required to safely pack package directories without running lifecycle scripts (found npm %s); upgrade npm or provide a prebuilt .tgz", version)
+	}
+	output, err := runner.Run(ctx, executable, "pack", directory, "--json", "--ignore-scripts", "--pack-destination", directory)
 	if err != nil {
 		return "", fmt.Errorf("npm pack failed: %w (output: %s)", err, string(output))
 	}
@@ -159,6 +188,19 @@ func (p ExecPacker) Pack(ctx context.Context, directory string) (string, error) 
 		path = filepath.Join(directory, path)
 	}
 	return path, nil
+}
+
+func parseNPMVersion(output []byte) (string, int, error) {
+	version := strings.TrimSpace(string(output))
+	parts := strings.SplitN(strings.TrimPrefix(version, "v"), ".", 2)
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("parse npm version from %q", version)
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil || major < 0 {
+		return "", 0, fmt.Errorf("parse npm version from %q", version)
+	}
+	return version, major, nil
 }
 
 func readPackageJSON(tarball string) (packageJSON, error) {

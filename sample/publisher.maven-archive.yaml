@@ -1,0 +1,33 @@
+# Maven packages packaged in an outer archive.
+package:
+  archive_path: a06d09e2a29e5f98138682de1dc669865445f0c387aa6c3587f471dd18385d74.tar.gz
+  format: maven
+  publish_driver: maven_cli
+  recursive: true
+
+repository_profile: internal-mvn
+
+repositories:
+  internal-mvn:
+    provider: ado
+    feed_base_url: "https://daado01.tytb.com/Dev_DefaultCollection"
+    package_base_url: "https://daado01.tytb.com/Dev_DefaultCollection"
+    organization: Dev_DefaultCollection
+    project: Diamond-CMB
+    feed: yuantabank_cmb_test
+    username: Dev_DefaultCollection
+    credential_ref: ADO_ARTIFACT_PAT
+
+options:
+  existing_package_policy: SKIP_IDENTICAL
+  timeout: 5m
+  retry_count: 2
+  dry_run: false
+  parallelism: 20
+  fail_fast: false
+
+metadata:
+  pipeline_id: ""
+  build_id: ""
+  commit_sha: ""
+  correlation_id: ""

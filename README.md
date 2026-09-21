@@ -40,7 +40,7 @@ Release 版本不會被覆蓋：相同版本若內容不同會直接失敗。
 - 已存在且可寫入的 Azure DevOps Artifacts Feed，或格式相容的 Nexus hosted repository。
 - ADO 使用具備 Packaging Read & Write 權限的 PAT；Nexus 使用具備 repository read/write 權限的帳號密碼。
 - Maven 套件需要 Maven CLI（`mvn`）。
-- npm 套件需要 Node.js 與 npm CLI。
+- npm 套件需要 Node.js 與 npm CLI；從 package directory 或 `node_modules` 建立 tarball 時需要 npm 11 以上。
 - PyPI 套件需要 Python 3 與 Twine。
 
 安裝 PyPI 發佈工具：
@@ -231,7 +231,7 @@ npm 的 `.tgz` 或 PyPI 的 `.zip` 若本身就是待發佈套件，仍應使用
 | `package_base_url` | 否 | ADO 套件查詢與發佈的 organization base URL；未設定時為 `https://pkgs.dev.azure.com/<organization>` |
 | `base_url` | Nexus | Nexus server 根 URL，可包含安裝 context path |
 | `repository` | Nexus | 格式相容的 Nexus hosted repository 名稱 |
-| `username` | Nexus | Nexus 登入帳號 |
+| `username` | ADO 否／Nexus 是 | ADO Basic Auth username 或 Nexus 登入帳號；雲端 ADO 通常不需設定，ADO Server 可填 collection name |
 | `credential_ref` | 是 | 保存 ADO PAT 或 Nexus 密碼的環境變數名稱，不是 secret 本身 |
 
 ### `options`
@@ -309,6 +309,9 @@ npm 支援：
 ```bash
 npm pack <package-directory> --json --ignore-scripts
 ```
+
+此模式需要 npm 11 以上；npm 10 及更早版本的 `npm pack` 不會讓
+`--ignore-scripts` 阻止 `prepare`，工具會先拒絕執行並提示升級。若無法升級，請改以預先建立的 `.tgz` 作為輸入。
 
 `private: true` 的套件會在本地拒絕。Recursive discovery 會辨識各層 `node_modules` 中真正的套件根目錄、忽略 fixture，並依 name/version 去重。
 

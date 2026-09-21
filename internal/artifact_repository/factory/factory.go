@@ -32,7 +32,7 @@ func New(profile config.RepositoryConfig, secrets SecretResolver) (artifactrepos
 			FeedBaseURL:    profile.FeedBaseURL,
 			PackageBaseURL: profile.PackageBaseURL,
 			BaseURL:        profile.BaseURL,
-			Credential:     credential.PersonalAccessToken{Token: secret},
+			Credential:     credential.PersonalAccessToken{User: profile.Username, Token: secret},
 		})
 	case "nexus":
 		repository = nexus.New(nexus.Config{
