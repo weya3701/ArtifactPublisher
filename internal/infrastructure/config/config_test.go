@@ -30,6 +30,9 @@ repositories:
     organization: company
     project: platform
     feed: approved
+    feed_base_url: https://feeds.example.com/company
+    package_base_url: https://packages.example.com/company
+    username: company-collection
     credential_ref: ADO_PAT
 options:
   existing_package_policy: SKIP_IDENTICAL
@@ -61,6 +64,13 @@ metadata:
 	}
 	if loaded.Metadata.CorrelationID != "correlation-1" {
 		t.Fatalf("metadata not parsed: %+v", loaded.Metadata)
+	}
+	repository := loaded.Repositories["internal-maven"]
+	if repository.FeedBaseURL != "https://feeds.example.com/company" || repository.PackageBaseURL != "https://packages.example.com/company" {
+		t.Fatalf("ADO base URLs not parsed: %+v", repository)
+	}
+	if repository.Username != "company-collection" {
+		t.Fatalf("ADO username = %q; want company-collection", repository.Username)
 	}
 }
 

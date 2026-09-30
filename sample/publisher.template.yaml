@@ -18,6 +18,10 @@ repositories:
     organization: {{ org }}
     project: {{ project }}
     feed: {{ repository }}
+    # Optional organization-level endpoint overrides. Azure defaults are used when omitted.
+    # feed_base_url: https://feeds.example.com/{{ org }}
+    # package_base_url: https://packages.example.com/{{ org }}
+    # username: "{{ org }}" # ADO Server 建議填 collection name；雲端 ADO 通常不需設定
     credential_ref: {{ credential }}
 
   # Nexus profile example (use a format-compatible hosted repository):

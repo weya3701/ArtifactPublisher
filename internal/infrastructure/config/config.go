@@ -45,14 +45,16 @@ type NPMPackageConfig struct {
 }
 
 type RepositoryConfig struct {
-	Provider      string `yaml:"provider"`
-	Organization  string `yaml:"organization"`
-	Project       string `yaml:"project"`
-	Feed          string `yaml:"feed"`
-	BaseURL       string `yaml:"base_url"`
-	Repository    string `yaml:"repository"`
-	Username      string `yaml:"username"`
-	CredentialRef string `yaml:"credential_ref"`
+	Provider       string `yaml:"provider"`
+	Organization   string `yaml:"organization"`
+	Project        string `yaml:"project"`
+	Feed           string `yaml:"feed"`
+	FeedBaseURL    string `yaml:"feed_base_url"`
+	PackageBaseURL string `yaml:"package_base_url"`
+	BaseURL        string `yaml:"base_url"`
+	Repository     string `yaml:"repository"`
+	Username       string `yaml:"username"`
+	CredentialRef  string `yaml:"credential_ref"`
 }
 
 type OptionsConfig struct {
