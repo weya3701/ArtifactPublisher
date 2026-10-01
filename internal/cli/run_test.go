@@ -82,6 +82,38 @@ func TestRunPOMOnlyPublishesMavenPOMWithoutMainArtifact(t *testing.T) {
 	}
 }
 
+func TestRunPOMOnlyIncludesAvailableMavenArtifacts(t *testing.T) {
+	root := t.TempDir()
+	for name, content := range map[string]string{
+		"demo-1.0.0.pom":    `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`,
+		"demo-1.0.0.jar":    "jar-content",
+		"demo-1.0.0.module": "module-content",
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: maven\n  publish_driver: maven_cli\n", root)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test", "--pomonly"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	var result model.PublishResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.Package.POMOnly || len(result.Package.Files) != 3 {
+		t.Fatalf("available artifacts were skipped: %+v", result.Package)
+	}
+}
+
 func TestRunWithoutPOMOnlyStillRejectsMissingMainArtifact(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "demo-1.0.0.pom"), []byte(`<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`), 0o600); err != nil {

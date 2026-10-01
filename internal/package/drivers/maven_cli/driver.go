@@ -35,7 +35,7 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 	if target.Endpoint == "" || target.RepositoryID == "" || target.Credential == nil || target.Credential.Secret() == "" {
 		return fmt.Errorf("Maven publish target is incomplete")
 	}
-	pom, main, sources, javadoc := packageFiles(descriptor)
+	pom, main, sources, javadoc, attached := packageFiles(descriptor)
 	if pom == "" || (!descriptor.POMOnly && descriptor.Packaging != "pom" && main == "") {
 		return fmt.Errorf("Maven package requires POM and main artifact")
 	}
@@ -55,7 +55,8 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 		runner = ExecRunner{}
 	}
 	args := []string{"--batch-mode", "--no-transfer-progress", "--settings", settingsPath, "deploy:deploy-file"}
-	if descriptor.POMOnly || descriptor.Packaging == "pom" {
+	deployingPOMAsMain := main == "" || descriptor.Packaging == "pom"
+	if deployingPOMAsMain {
 		main = pom
 	}
 	args = append(args,
@@ -65,11 +66,29 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 		"-Durl="+target.Endpoint,
 		"-DgeneratePom=false",
 	)
+	if deployingPOMAsMain {
+		args = append(args, "-Dpackaging=pom")
+	}
 	if sources != "" {
 		args = append(args, "-Dsources="+sources)
 	}
 	if javadoc != "" {
 		args = append(args, "-Djavadoc="+javadoc)
+	}
+	if len(attached) > 0 {
+		files := make([]string, 0, len(attached))
+		types := make([]string, 0, len(attached))
+		classifiers := make([]string, 0, len(attached))
+		for _, file := range attached {
+			files = append(files, file.Path)
+			types = append(types, file.Extension)
+			classifiers = append(classifiers, file.Classifier)
+		}
+		args = append(args,
+			"-Dfiles="+strings.Join(files, ","),
+			"-Dtypes="+strings.Join(types, ","),
+			"-Dclassifiers="+strings.Join(classifiers, ","),
+		)
 	}
 	output, err := runner.Run(ctx, executable, args...)
 	if err != nil {
@@ -78,7 +97,7 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 	return nil
 }
 
-func packageFiles(descriptor model.PackageDescriptor) (pom, main, sources, javadoc string) {
+func packageFiles(descriptor model.PackageDescriptor) (pom, main, sources, javadoc string, attached []model.PackageFile) {
 	for _, file := range descriptor.Files {
 		switch file.Classifier {
 		case "sources":
@@ -88,8 +107,10 @@ func packageFiles(descriptor model.PackageDescriptor) (pom, main, sources, javad
 		default:
 			if file.Extension == "pom" {
 				pom = file.Path
-			} else if file.Extension == descriptor.Packaging {
+			} else if file.Extension == descriptor.Packaging && file.Classifier == "" {
 				main = file.Path
+			} else {
+				attached = append(attached, file)
 			}
 		}
 	}

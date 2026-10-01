@@ -31,7 +31,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	modeValue := flags.String("mode", "", "publish mode (test for offline simulation)")
 	outputValue := flags.String("output", "", "result output format (json or csv; default json)")
 	filePath := flags.String("file", "", "write the result to a .json or .csv file instead of stdout")
-	pomOnly := flags.Bool("pomonly", false, "publish only the POM for Maven packages")
+	pomOnly := flags.Bool("pomonly", false, "allow Maven packages that contain only a POM")
 	verbose := flags.Bool("verbose", false, "show publish progress on stderr")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2

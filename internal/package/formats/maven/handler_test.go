@@ -79,7 +79,7 @@ func TestBuildPackageDescriptorAllowsPOMOnlyInputWhenEnabled(t *testing.T) {
 	pomPath := filepath.Join(directory, "demo-1.0.0.pom")
 	write(t, pomPath, `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
 
-	descriptor, err := (maven.Handler{POMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
 	if err != nil {
 		t.Fatalf("BuildPackageDescriptor() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestBuildPackageDescriptorPOMOnlySupportsISO88591POM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	descriptor, err := (maven.Handler{POMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
 	if err != nil {
 		t.Fatalf("BuildPackageDescriptor() error = %v", err)
 	}
@@ -113,18 +113,52 @@ func TestBuildPackageDescriptorPOMOnlySupportsISO88591POM(t *testing.T) {
 	}
 }
 
-func TestBuildPackageDescriptorPOMOnlyExcludesOtherArtifacts(t *testing.T) {
+func TestBuildPackageDescriptorPOMOnlyIncludesAvailableArtifacts(t *testing.T) {
 	directory := t.TempDir()
 	write(t, filepath.Join(directory, "demo-1.0.0.pom"), `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
 	write(t, filepath.Join(directory, "demo-1.0.0.jar"), "jar-content")
 	write(t, filepath.Join(directory, "demo-1.0.0.module"), "module-content")
+	write(t, filepath.Join(directory, "demo-1.0.0-sources.jar"), "sources-content")
+	write(t, filepath.Join(directory, "demo-1.0.0-tests.jar"), "tests-content")
 
-	descriptor, err := (maven.Handler{POMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
 	if err != nil {
 		t.Fatalf("BuildPackageDescriptor() error = %v", err)
 	}
-	if len(descriptor.Files) != 1 || descriptor.Files[0].Name != "demo-1.0.0.pom" {
-		t.Fatalf("POM-only descriptor included other artifacts: %+v", descriptor.Files)
+	if descriptor.POMOnly || len(descriptor.Files) != 5 {
+		t.Fatalf("available artifacts were not included: %+v", descriptor)
+	}
+	want := map[string]string{
+		"demo-1.0.0.jar":         "",
+		"demo-1.0.0.module":      "",
+		"demo-1.0.0.pom":         "",
+		"demo-1.0.0-sources.jar": "sources",
+		"demo-1.0.0-tests.jar":   "tests",
+	}
+	for _, file := range descriptor.Files {
+		classifier, ok := want[file.Name]
+		if !ok || file.Classifier != classifier {
+			t.Fatalf("unexpected artifact: %+v", file)
+		}
+		delete(want, file.Name)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing artifacts: %#v", want)
+	}
+}
+
+func TestBuildPackageDescriptorPOMOnlyIncludesAttachmentsWithoutMainArtifact(t *testing.T) {
+	directory := t.TempDir()
+	write(t, filepath.Join(directory, "demo-1.0.0.pom"), `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
+	write(t, filepath.Join(directory, "demo-1.0.0.module"), "module-content")
+	write(t, filepath.Join(directory, "demo-1.0.0-sources.jar"), "sources-content")
+
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if !descriptor.POMOnly || len(descriptor.Files) != 3 {
+		t.Fatalf("attachments were not included with POM-only fallback: %+v", descriptor)
 	}
 }
 
