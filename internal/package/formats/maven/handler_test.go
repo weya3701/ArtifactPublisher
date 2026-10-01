@@ -74,6 +74,94 @@ func TestBuildPackageDescriptorRejectsMissingMainArtifact(t *testing.T) {
 	}
 }
 
+func TestBuildPackageDescriptorAllowsPOMOnlyInputWhenEnabled(t *testing.T) {
+	directory := t.TempDir()
+	pomPath := filepath.Join(directory, "demo-1.0.0.pom")
+	write(t, pomPath, `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
+
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if !descriptor.POMOnly || descriptor.Packaging != "jar" || len(descriptor.Files) != 1 {
+		t.Fatalf("unexpected POM-only descriptor: %+v", descriptor)
+	}
+	if descriptor.Files[0].Path != pomPath || descriptor.Files[0].Extension != "pom" {
+		t.Fatalf("unexpected POM-only file: %+v", descriptor.Files[0])
+	}
+	if _, err := os.Stat(pomPath + ".sha256"); err != nil {
+		t.Fatalf("generated POM checksum: %v", err)
+	}
+}
+
+func TestBuildPackageDescriptorPOMOnlySupportsISO88591POM(t *testing.T) {
+	directory := t.TempDir()
+	pomPath := filepath.Join(directory, "demo-1.0.0.pom")
+	pom := []byte(`<?xml version="1.0" encoding="ISO-8859-1"?><project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version><description>Caf`)
+	pom = append(pom, 0xe9)
+	pom = append(pom, []byte(`</description></project>`)...)
+	if err := os.WriteFile(pomPath, pom, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if descriptor.Namespace != "com.example" || descriptor.Name != "demo" || descriptor.Version != "1.0.0" {
+		t.Fatalf("unexpected coordinate: %+v", descriptor)
+	}
+}
+
+func TestBuildPackageDescriptorPOMOnlyIncludesAvailableArtifacts(t *testing.T) {
+	directory := t.TempDir()
+	write(t, filepath.Join(directory, "demo-1.0.0.pom"), `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
+	write(t, filepath.Join(directory, "demo-1.0.0.jar"), "jar-content")
+	write(t, filepath.Join(directory, "demo-1.0.0.module"), "module-content")
+	write(t, filepath.Join(directory, "demo-1.0.0-sources.jar"), "sources-content")
+	write(t, filepath.Join(directory, "demo-1.0.0-tests.jar"), "tests-content")
+
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if descriptor.POMOnly || len(descriptor.Files) != 5 {
+		t.Fatalf("available artifacts were not included: %+v", descriptor)
+	}
+	want := map[string]string{
+		"demo-1.0.0.jar":         "",
+		"demo-1.0.0.module":      "",
+		"demo-1.0.0.pom":         "",
+		"demo-1.0.0-sources.jar": "sources",
+		"demo-1.0.0-tests.jar":   "tests",
+	}
+	for _, file := range descriptor.Files {
+		classifier, ok := want[file.Name]
+		if !ok || file.Classifier != classifier {
+			t.Fatalf("unexpected artifact: %+v", file)
+		}
+		delete(want, file.Name)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing artifacts: %#v", want)
+	}
+}
+
+func TestBuildPackageDescriptorPOMOnlyIncludesAttachmentsWithoutMainArtifact(t *testing.T) {
+	directory := t.TempDir()
+	write(t, filepath.Join(directory, "demo-1.0.0.pom"), `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
+	write(t, filepath.Join(directory, "demo-1.0.0.module"), "module-content")
+	write(t, filepath.Join(directory, "demo-1.0.0-sources.jar"), "sources-content")
+
+	descriptor, err := (maven.Handler{AllowPOMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if !descriptor.POMOnly || len(descriptor.Files) != 3 {
+		t.Fatalf("attachments were not included with POM-only fallback: %+v", descriptor)
+	}
+}
+
 func TestBuildPackageDescriptorUsesParentGAV(t *testing.T) {
 	directory := t.TempDir()
 	write(t, filepath.Join(directory, "child-2.0.0.pom"), `<project><parent><groupId>com.example</groupId><version>2.0.0</version></parent><artifactId>child</artifactId></project>`)

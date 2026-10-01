@@ -24,6 +24,7 @@ type PackageDescriptor struct {
 	Name      string        `json:"name"`
 	Version   string        `json:"version"`
 	Packaging string        `json:"packaging"`
+	POMOnly   bool          `json:"pomOnly,omitempty"`
 	Files     []PackageFile `json:"files"`
 	SHA256    string        `json:"sha256"`
 }

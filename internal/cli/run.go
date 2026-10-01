@@ -22,7 +22,7 @@ import (
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "publish" {
-		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--verbose]")
+		fmt.Fprintln(stderr, "usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--pomonly] [--verbose]")
 		return 2
 	}
 	flags := flag.NewFlagSet("publish", flag.ContinueOnError)
@@ -31,6 +31,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	modeValue := flags.String("mode", "", "publish mode (test for offline simulation)")
 	outputValue := flags.String("output", "", "result output format (json or csv; default json)")
 	filePath := flags.String("file", "", "write the result to a .json or .csv file instead of stdout")
+	pomOnly := flags.Bool("pomonly", false, "allow Maven packages that contain only a POM")
 	verbose := flags.Bool("verbose", false, "show publish progress on stderr")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
@@ -57,6 +58,13 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		writeFailure(resultDestination, stderr, "CONFIGURATION", err)
 		return 2
 	}
+	if *pomOnly && loaded.Package.Format != string(model.FormatMaven) {
+		err := fmt.Errorf("--pomonly is supported for Maven packages only")
+		progress.Printf("configuration failed: %v", err)
+		writeFailure(resultDestination, stderr, "CONFIGURATION", err)
+		return 2
+	}
+	loaded.Package.POMOnly = *pomOnly
 	progress.Printf("configuration loaded: format=%s mode=%s", loaded.Package.Format, displayMode(mode))
 	cleanup := func() {}
 	if loaded.Package.ArchivePath != "" {

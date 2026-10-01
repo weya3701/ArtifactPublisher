@@ -33,7 +33,7 @@ func Build(c config.Config, secrets SecretResolver) (Components, error) {
 func BuildForMode(c config.Config, secrets SecretResolver, mode config.PublishMode) (Components, error) {
 	var handler packagehandler.Handler
 	if c.Package.Format == string(model.FormatMaven) {
-		handler = mavenhandler.Handler{Fallback: mavenhandler.Coordinates{
+		handler = mavenhandler.Handler{AllowPOMOnly: c.Package.POMOnly, Fallback: mavenhandler.Coordinates{
 			GroupID: c.Package.Maven.GroupID, ArtifactID: c.Package.Maven.ArtifactID, Version: c.Package.Maven.Version,
 		}}
 	}

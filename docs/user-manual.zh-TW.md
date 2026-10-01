@@ -37,7 +37,7 @@ go build -o package-publisher ./cmd/publisher
 若畫面顯示以下用法，表示執行檔可正常啟動：
 
 ```text
-usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--verbose]
+usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--pomonly] [--verbose]
 ```
 
 也可以不先建置，直接使用：
@@ -417,6 +417,7 @@ downloaded-maven-repository/
 └── com/example/demo/1.0.0/
     ├── demo-1.0.0.jar
     ├── demo-1.0.0.pom
+    ├── demo-1.0.0.module
     ├── demo-1.0.0-sources.jar
     └── demo-1.0.0-javadoc.jar
 ```
@@ -465,7 +466,23 @@ repositories:
 
 每個可發佈版本目錄只能有一個 POM；若沒有 POM，則必須恰好有一個非 sources、javadoc、tests 的主 JAR。
 
-### 7.2 單一 JAR
+### 7.2 允許只有 POM 的套件
+
+若 Gradle/Maven repository 中可能包含只有 POM、沒有主 artifact 的套件，請在 publish 命令加入 `--pomonly`：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly
+```
+
+`--pomonly` 只適用於 `package.format: maven`，單套件與 recursive batch 均可使用。它只放寬「必須有主 artifact」的完整性規則，不會過濾套件檔案：同目錄若存在主 JAR、Gradle `.module`、sources、javadoc、tests 或其他 classifier artifact，仍會納入 bundle、checksum、遠端內容比對與發佈。只有缺少主 artifact 時，才會以 POM 作為主要發佈檔。未加入此旗標時，POM 的 packaging 不是 `pom` 就必須存在對應的主 artifact。
+
+可先搭配測試模式確認探索與 metadata：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly --mode=test
+```
+
+### 7.3 單一 JAR
 
 若 JAR 含 `META-INF/maven/**/pom.properties`，工具會讀取 GAV、驗證檔名並產生最小 POM：
 

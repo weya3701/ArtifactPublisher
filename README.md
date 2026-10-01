@@ -150,6 +150,14 @@ go build -o package-publisher ./cmd/publisher
 
 進度訊息會寫入 `stderr`，最終 JSON 或 CSV 仍單獨寫入 `stdout`（或 `--file` 指定的檔案）。`--verbose` 亦可與 `--mode=test` 同時使用。
 
+Maven/Gradle repository 中若可能包含只有 POM、沒有主 artifact 的套件，可加入 `--pomonly`：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly
+```
+
+此旗標只適用於 `package.format: maven`，作用是允許缺少主 artifact 的 POM-only 套件，不會過濾檔案。若同目錄存在 JAR、Gradle `.module`、sources、javadoc 或其他 classifier artifact，仍會納入 bundle、checksum、遠端內容比對與發佈。未加入旗標時仍維持完整套件的既有檢查方式。
+
 ## 設定說明
 
 ### `package`
@@ -263,11 +271,22 @@ npm 的 `.tgz` 或 PyPI 的 `.zip` 若本身就是待發佈套件，仍應使用
 downloaded-maven-repository/com/example/demo/1.0.0/
 ├── demo-1.0.0.jar
 ├── demo-1.0.0.pom
+├── demo-1.0.0.module         # optional Gradle metadata
 ├── demo-1.0.0-sources.jar    # optional
 └── demo-1.0.0-javadoc.jar    # optional
 ```
 
-Handler 會解析 POM 的 groupId、artifactId、version 與 packaging，並將主 artifact、POM、sources、javadoc 視為同一個 bundle。
+Handler 會解析 POM 的 groupId、artifactId、version 與 packaging，並將主 artifact、POM、Gradle `.module` 與 classifier artifacts（例如 sources、javadoc、tests）視為同一個 bundle。
+
+### 只有 POM
+
+只有 POM 的版本目錄可透過 `--pomonly` 放寬完整性檢查後發佈：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly
+```
+
+此模式也支援 recursive batch；每個版本目錄仍只能有一個 POM。`--pomonly` 不會強制只發佈 POM：目錄內若有主 JAR、`.module` 或 classifier artifacts，仍會全部發佈。若未加入 `--pomonly`，且 POM 的 packaging 不是 `pom`，缺少主 artifact 時仍會失敗。
 
 ### 只有 JAR
 

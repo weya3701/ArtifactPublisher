@@ -32,6 +32,7 @@ type PackageConfig struct {
 	Exclude       []string           `yaml:"exclude"`
 	Maven         MavenPackageConfig `yaml:"maven"`
 	NPM           NPMPackageConfig   `yaml:"npm"`
+	POMOnly       bool               `yaml:"-"`
 }
 
 type MavenPackageConfig struct {

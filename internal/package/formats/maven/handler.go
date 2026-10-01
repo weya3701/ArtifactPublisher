@@ -1,9 +1,11 @@
 package maven
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,7 +21,14 @@ type Coordinates struct {
 }
 
 type Handler struct {
-	Fallback Coordinates
+	Fallback     Coordinates
+	AllowPOMOnly bool
+}
+
+type artifactFileSpec struct {
+	Name       string
+	Classifier string
+	Extension  string
 }
 
 type pomProject struct {
@@ -57,7 +66,9 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 		return model.PackageDescriptor{}, fmt.Errorf("read POM: %w", err)
 	}
 	var pom pomProject
-	if err := xml.Unmarshal(data, &pom); err != nil {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.CharsetReader = pomCharsetReader
+	if err := decoder.Decode(&pom); err != nil {
 		return model.PackageDescriptor{}, fmt.Errorf("parse POM %q: %w", pomPath, err)
 	}
 	if pom.GroupID == "" {
@@ -74,34 +85,38 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 	}
 
 	base := pom.ArtifactID + "-" + pom.Version
-	fileNames := []string{base + ".pom"}
+	pomName := base + ".pom"
+	fileSpecs := []artifactFileSpec{{Name: pomName, Extension: "pom"}}
 	mainName := base + "." + pom.Packaging
+	mainAvailable := pom.Packaging == "pom"
 	if pom.Packaging != "pom" {
-		fileNames = append(fileNames, mainName)
-	}
-	for _, classifier := range []string{"sources", "javadoc"} {
-		name := base + "-" + classifier + ".jar"
-		if _, err := os.Stat(filepath.Join(directory, name)); err == nil {
-			fileNames = append(fileNames, name)
+		_, statErr := os.Stat(filepath.Join(directory, mainName))
+		if statErr == nil {
+			mainAvailable = true
+			fileSpecs = append(fileSpecs, artifactFileSpec{Name: mainName, Extension: pom.Packaging})
+		} else if !os.IsNotExist(statErr) {
+			return model.PackageDescriptor{}, fmt.Errorf("inspect Maven main artifact %q: %w", mainName, statErr)
+		} else if !h.AllowPOMOnly {
+			// Preserve the standard completeness error when POM-only fallback is disabled.
+			fileSpecs = append(fileSpecs, artifactFileSpec{Name: mainName, Extension: pom.Packaging})
 		}
 	}
+	attached, err := discoverAttachedArtifacts(directory, base, pomName, mainName)
+	if err != nil {
+		return model.PackageDescriptor{}, err
+	}
+	fileSpecs = append(fileSpecs, attached...)
 
-	files := make([]model.PackageFile, 0, len(fileNames))
-	for _, name := range fileNames {
-		filePath := filepath.Join(directory, name)
+	files := make([]model.PackageFile, 0, len(fileSpecs))
+	for _, spec := range fileSpecs {
+		filePath := filepath.Join(directory, spec.Name)
 		checksum, err := model.FileSHA256(filePath)
 		if err != nil {
-			return model.PackageDescriptor{}, fmt.Errorf("required Maven artifact %q: %w", name, err)
-		}
-		classifier := ""
-		if strings.HasSuffix(name, "-sources.jar") {
-			classifier = "sources"
-		} else if strings.HasSuffix(name, "-javadoc.jar") {
-			classifier = "javadoc"
+			return model.PackageDescriptor{}, fmt.Errorf("required Maven artifact %q: %w", spec.Name, err)
 		}
 		files = append(files, model.PackageFile{
-			Path: filePath, Name: name, Classifier: classifier,
-			Extension: strings.TrimPrefix(filepath.Ext(name), "."), SHA256: checksum,
+			Path: filePath, Name: spec.Name, Classifier: spec.Classifier,
+			Extension: spec.Extension, SHA256: checksum,
 		})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
@@ -111,8 +126,69 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 	}
 	return model.PackageDescriptor{
 		Format: model.FormatMaven, Namespace: pom.GroupID, Name: pom.ArtifactID,
-		Version: pom.Version, Packaging: pom.Packaging, Files: files, SHA256: bundleChecksum,
+		Version: pom.Version, Packaging: pom.Packaging,
+		POMOnly: !mainAvailable && h.AllowPOMOnly,
+		Files:   files, SHA256: bundleChecksum,
 	}, nil
+}
+
+func discoverAttachedArtifacts(directory, base, pomName, mainName string) ([]artifactFileSpec, error) {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return nil, fmt.Errorf("list Maven package directory %q: %w", directory, err)
+	}
+	ignoredExtensions := map[string]bool{
+		"asc": true, "lastupdated": true, "md5": true,
+		"sha1": true, "sha256": true, "sha512": true,
+	}
+	var artifacts []artifactFileSpec
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if name == pomName || name == mainName {
+			continue
+		}
+		extension := strings.TrimPrefix(filepath.Ext(name), ".")
+		if extension == "" || ignoredExtensions[strings.ToLower(extension)] {
+			continue
+		}
+		unclassifiedPrefix := base + "."
+		if strings.HasPrefix(name, unclassifiedPrefix) && strings.TrimPrefix(name, unclassifiedPrefix) == extension {
+			artifacts = append(artifacts, artifactFileSpec{Name: name, Extension: extension})
+			continue
+		}
+		prefix := base + "-"
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		classifier := strings.TrimSuffix(strings.TrimPrefix(name, prefix), "."+extension)
+		if classifier == "" {
+			continue
+		}
+		artifacts = append(artifacts, artifactFileSpec{
+			Name: name, Classifier: classifier, Extension: extension,
+		})
+	}
+	return artifacts, nil
+}
+
+func pomCharsetReader(charset string, input io.Reader) (io.Reader, error) {
+	switch strings.ToLower(strings.TrimSpace(charset)) {
+	case "iso-8859-1", "iso8859-1", "latin-1", "latin1":
+		data, err := io.ReadAll(input)
+		if err != nil {
+			return nil, err
+		}
+		decoded := make([]rune, len(data))
+		for index, value := range data {
+			decoded[index] = rune(value)
+		}
+		return strings.NewReader(string(decoded)), nil
+	default:
+		return nil, fmt.Errorf("unsupported POM XML encoding %q", charset)
+	}
 }
 
 func (Handler) ValidateCompleteness(descriptor model.PackageDescriptor) error {
@@ -124,7 +200,7 @@ func (Handler) ValidateCompleteness(descriptor model.PackageDescriptor) error {
 	}
 	base := descriptor.Name + "-" + descriptor.Version
 	required := map[string]bool{base + ".pom": false}
-	if descriptor.Packaging != "pom" {
+	if !descriptor.POMOnly && descriptor.Packaging != "pom" {
 		required[base+"."+descriptor.Packaging] = false
 	}
 	for _, file := range descriptor.Files {
