@@ -150,6 +150,14 @@ go build -o package-publisher ./cmd/publisher
 
 進度訊息會寫入 `stderr`，最終 JSON 或 CSV 仍單獨寫入 `stdout`（或 `--file` 指定的檔案）。`--verbose` 亦可與 `--mode=test` 同時使用。
 
+Maven/Gradle repository 中若只需要發佈 POM，可加入 `--pomonly`：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly
+```
+
+此旗標只適用於 `package.format: maven`。啟用後，每個套件只驗證並發佈 `<artifactId>-<version>.pom`，同目錄的 JAR、Gradle `.module`、sources 與 javadoc 不會納入本次 bundle。未加入旗標時仍維持完整套件的既有檢查與發佈方式。
+
 ## 設定說明
 
 ### `package`
@@ -268,6 +276,16 @@ downloaded-maven-repository/com/example/demo/1.0.0/
 ```
 
 Handler 會解析 POM 的 groupId、artifactId、version 與 packaging，並將主 artifact、POM、sources、javadoc 視為同一個 bundle。
+
+### 只有 POM
+
+只有 POM 的版本目錄可透過 `--pomonly` 發佈：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly
+```
+
+此模式也支援 recursive batch；每個版本目錄仍只能有一個 POM。若未加入 `--pomonly`，且 POM 的 packaging 不是 `pom`，缺少主 artifact 時仍會失敗。
 
 ### 只有 JAR
 

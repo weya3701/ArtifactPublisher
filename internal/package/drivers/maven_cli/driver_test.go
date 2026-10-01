@@ -56,3 +56,23 @@ func TestPublishUsesTemporarySettingsAndNoSecretArgument(t *testing.T) {
 		t.Fatal("PAT leaked into process arguments")
 	}
 }
+
+func TestPublishPOMOnlyUsesPOMAsDeployFile(t *testing.T) {
+	runner := &captureRunner{}
+	driverImpl := mavencli.Driver{Runner: runner}
+	descriptor := model.PackageDescriptor{
+		Format: model.FormatMaven, Packaging: "jar", POMOnly: true,
+		Files: []model.PackageFile{{Path: "/tmp/demo.pom", Extension: "pom"}},
+	}
+	err := driverImpl.Publish(context.Background(), descriptor, driver.Target{
+		RepositoryID: "feed", Endpoint: "https://example.test/maven/v1",
+		Credential: credential.PersonalAccessToken{Token: "pat"},
+	})
+	if err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+	arguments := strings.Join(runner.args, " ")
+	if !strings.Contains(arguments, "-Dfile=/tmp/demo.pom") || !strings.Contains(arguments, "-DpomFile=/tmp/demo.pom") {
+		t.Fatalf("POM-only Maven arguments = %q", arguments)
+	}
+}

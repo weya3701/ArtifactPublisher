@@ -20,6 +20,7 @@ type Coordinates struct {
 
 type Handler struct {
 	Fallback Coordinates
+	POMOnly  bool
 }
 
 type pomProject struct {
@@ -76,13 +77,15 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 	base := pom.ArtifactID + "-" + pom.Version
 	fileNames := []string{base + ".pom"}
 	mainName := base + "." + pom.Packaging
-	if pom.Packaging != "pom" {
+	if !h.POMOnly && pom.Packaging != "pom" {
 		fileNames = append(fileNames, mainName)
 	}
-	for _, classifier := range []string{"sources", "javadoc"} {
-		name := base + "-" + classifier + ".jar"
-		if _, err := os.Stat(filepath.Join(directory, name)); err == nil {
-			fileNames = append(fileNames, name)
+	if !h.POMOnly {
+		for _, classifier := range []string{"sources", "javadoc"} {
+			name := base + "-" + classifier + ".jar"
+			if _, err := os.Stat(filepath.Join(directory, name)); err == nil {
+				fileNames = append(fileNames, name)
+			}
 		}
 	}
 
@@ -111,7 +114,8 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 	}
 	return model.PackageDescriptor{
 		Format: model.FormatMaven, Namespace: pom.GroupID, Name: pom.ArtifactID,
-		Version: pom.Version, Packaging: pom.Packaging, Files: files, SHA256: bundleChecksum,
+		Version: pom.Version, Packaging: pom.Packaging, POMOnly: h.POMOnly,
+		Files: files, SHA256: bundleChecksum,
 	}, nil
 }
 
@@ -124,7 +128,7 @@ func (Handler) ValidateCompleteness(descriptor model.PackageDescriptor) error {
 	}
 	base := descriptor.Name + "-" + descriptor.Version
 	required := map[string]bool{base + ".pom": false}
-	if descriptor.Packaging != "pom" {
+	if !descriptor.POMOnly && descriptor.Packaging != "pom" {
 		required[base+"."+descriptor.Packaging] = false
 	}
 	for _, file := range descriptor.Files {

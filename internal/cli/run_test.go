@@ -55,6 +55,109 @@ func TestRunTestModePublishesWithoutRepositoryConfiguration(t *testing.T) {
 	}
 }
 
+func TestRunPOMOnlyPublishesMavenPOMWithoutMainArtifact(t *testing.T) {
+	root := t.TempDir()
+	pomPath := filepath.Join(root, "demo-1.0.0.pom")
+	if err := os.WriteFile(pomPath, []byte(`<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: maven\n  publish_driver: maven_cli\n", root)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test", "--pomonly"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	var result model.PublishResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if result.Status != model.StatusSuccess || !result.Package.POMOnly || len(result.Package.Files) != 1 || result.Package.Files[0].Path != pomPath {
+		t.Fatalf("unexpected POM-only result: %+v", result)
+	}
+}
+
+func TestRunWithoutPOMOnlyStillRejectsMissingMainArtifact(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "demo-1.0.0.pom"), []byte(`<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: maven\n  publish_driver: maven_cli\n", root)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test"}, &stdout, &stderr)
+	if exitCode != 1 || !strings.Contains(stdout.String(), `required Maven artifact \"demo-1.0.0.jar\"`) {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+}
+
+func TestRunPOMOnlySupportsRecursiveMavenPackages(t *testing.T) {
+	root := t.TempDir()
+	packagesPath := filepath.Join(root, "repository")
+	for _, artifact := range []string{"alpha", "beta"} {
+		directory := filepath.Join(packagesPath, "com", "example", artifact, "1.0.0")
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		pom := fmt.Sprintf(`<project><groupId>com.example</groupId><artifactId>%s</artifactId><version>1.0.0</version></project>`, artifact)
+		if err := os.WriteFile(filepath.Join(directory, artifact+"-1.0.0.pom"), []byte(pom), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: maven\n  publish_driver: maven_cli\n  recursive: true\n", packagesPath)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test", "--pomonly"}, &stdout, &stderr)
+	if exitCode != 0 {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+	var report model.BatchPublishReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if report.Status != model.StatusSuccess || report.Succeeded != 2 || len(report.Results) != 2 {
+		t.Fatalf("unexpected POM-only batch report: %+v", report)
+	}
+	for _, result := range report.Results {
+		if !result.Package.POMOnly || len(result.Package.Files) != 1 || result.Package.Files[0].Extension != "pom" {
+			t.Fatalf("unexpected POM-only batch result: %+v", result)
+		}
+	}
+}
+
+func TestRunRejectsPOMOnlyForNonMavenPackage(t *testing.T) {
+	root := t.TempDir()
+	packagePath := filepath.Join(root, "demo-1.0.0.tgz")
+	createNPMTarball(t, packagePath, `{"name":"demo","version":"1.0.0"}`)
+	configPath := filepath.Join(root, "publisher.yaml")
+	configData := fmt.Sprintf("package:\n  path: %q\n  format: npm\n  publish_driver: npm_cli\n", packagePath)
+	if err := os.WriteFile(configPath, []byte(configData), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := Run(context.Background(), []string{"publish", "--config", configPath, "--mode=test", "--pomonly"}, &stdout, &stderr)
+	if exitCode != 2 || !strings.Contains(stdout.String(), "--pomonly is supported for Maven packages only") {
+		t.Fatalf("Run() exit code = %d, stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+	}
+}
+
 func TestRunVerboseWritesProgressToStderrWithoutChangingJSON(t *testing.T) {
 	root := t.TempDir()
 	packagePath := filepath.Join(root, "demo-1.0.0.tgz")

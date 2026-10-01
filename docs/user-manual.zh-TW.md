@@ -37,7 +37,7 @@ go build -o package-publisher ./cmd/publisher
 若畫面顯示以下用法，表示執行檔可正常啟動：
 
 ```text
-usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--verbose]
+usage: package-publisher publish --config publisher.yaml [--mode=test] [--output=json|csv] [--file=result.json|result.csv] [--pomonly] [--verbose]
 ```
 
 也可以不先建置，直接使用：
@@ -465,7 +465,23 @@ repositories:
 
 每個可發佈版本目錄只能有一個 POM；若沒有 POM，則必須恰好有一個非 sources、javadoc、tests 的主 JAR。
 
-### 7.2 單一 JAR
+### 7.2 只發佈 POM
+
+若 Gradle/Maven repository 中只有 POM，或這次只希望發佈 POM，請在 publish 命令加入 `--pomonly`：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly
+```
+
+`--pomonly` 只適用於 `package.format: maven`，單套件與 recursive batch 均可使用。啟用後，每個版本只驗證並發佈 `<artifactId>-<version>.pom`；同目錄中的 JAR、Gradle `.module`、sources 與 javadoc 不會納入 bundle、checksum 或遠端內容比對。未加入此旗標時，仍維持原本的完整套件檢查：POM 的 packaging 不是 `pom` 時必須存在對應的主 artifact。
+
+可先搭配測試模式確認探索與 metadata：
+
+```bash
+./package-publisher publish --config publisher.yaml --pomonly --mode=test
+```
+
+### 7.3 單一 JAR
 
 若 JAR 含 `META-INF/maven/**/pom.properties`，工具會讀取 GAV、驗證檔名並產生最小 POM：
 

@@ -74,6 +74,41 @@ func TestBuildPackageDescriptorRejectsMissingMainArtifact(t *testing.T) {
 	}
 }
 
+func TestBuildPackageDescriptorAllowsPOMOnlyInputWhenEnabled(t *testing.T) {
+	directory := t.TempDir()
+	pomPath := filepath.Join(directory, "demo-1.0.0.pom")
+	write(t, pomPath, `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
+
+	descriptor, err := (maven.Handler{POMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if !descriptor.POMOnly || descriptor.Packaging != "jar" || len(descriptor.Files) != 1 {
+		t.Fatalf("unexpected POM-only descriptor: %+v", descriptor)
+	}
+	if descriptor.Files[0].Path != pomPath || descriptor.Files[0].Extension != "pom" {
+		t.Fatalf("unexpected POM-only file: %+v", descriptor.Files[0])
+	}
+	if _, err := os.Stat(pomPath + ".sha256"); err != nil {
+		t.Fatalf("generated POM checksum: %v", err)
+	}
+}
+
+func TestBuildPackageDescriptorPOMOnlyExcludesOtherArtifacts(t *testing.T) {
+	directory := t.TempDir()
+	write(t, filepath.Join(directory, "demo-1.0.0.pom"), `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
+	write(t, filepath.Join(directory, "demo-1.0.0.jar"), "jar-content")
+	write(t, filepath.Join(directory, "demo-1.0.0.module"), "module-content")
+
+	descriptor, err := (maven.Handler{POMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if len(descriptor.Files) != 1 || descriptor.Files[0].Name != "demo-1.0.0.pom" {
+		t.Fatalf("POM-only descriptor included other artifacts: %+v", descriptor.Files)
+	}
+}
+
 func TestBuildPackageDescriptorUsesParentGAV(t *testing.T) {
 	directory := t.TempDir()
 	write(t, filepath.Join(directory, "child-2.0.0.pom"), `<project><parent><groupId>com.example</groupId><version>2.0.0</version></parent><artifactId>child</artifactId></project>`)

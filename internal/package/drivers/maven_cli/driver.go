@@ -36,7 +36,7 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 		return fmt.Errorf("Maven publish target is incomplete")
 	}
 	pom, main, sources, javadoc := packageFiles(descriptor)
-	if pom == "" || (descriptor.Packaging != "pom" && main == "") {
+	if pom == "" || (!descriptor.POMOnly && descriptor.Packaging != "pom" && main == "") {
 		return fmt.Errorf("Maven package requires POM and main artifact")
 	}
 
@@ -55,7 +55,7 @@ func (d Driver) Publish(ctx context.Context, descriptor model.PackageDescriptor,
 		runner = ExecRunner{}
 	}
 	args := []string{"--batch-mode", "--no-transfer-progress", "--settings", settingsPath, "deploy:deploy-file"}
-	if descriptor.Packaging == "pom" {
+	if descriptor.POMOnly || descriptor.Packaging == "pom" {
 		main = pom
 	}
 	args = append(args,
