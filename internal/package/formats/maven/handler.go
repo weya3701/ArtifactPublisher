@@ -1,9 +1,11 @@
 package maven
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -58,7 +60,9 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 		return model.PackageDescriptor{}, fmt.Errorf("read POM: %w", err)
 	}
 	var pom pomProject
-	if err := xml.Unmarshal(data, &pom); err != nil {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.CharsetReader = pomCharsetReader
+	if err := decoder.Decode(&pom); err != nil {
 		return model.PackageDescriptor{}, fmt.Errorf("parse POM %q: %w", pomPath, err)
 	}
 	if pom.GroupID == "" {
@@ -117,6 +121,23 @@ func (h Handler) ParseMetadata(_ context.Context, path string) (model.PackageDes
 		Version: pom.Version, Packaging: pom.Packaging, POMOnly: h.POMOnly,
 		Files: files, SHA256: bundleChecksum,
 	}, nil
+}
+
+func pomCharsetReader(charset string, input io.Reader) (io.Reader, error) {
+	switch strings.ToLower(strings.TrimSpace(charset)) {
+	case "iso-8859-1", "iso8859-1", "latin-1", "latin1":
+		data, err := io.ReadAll(input)
+		if err != nil {
+			return nil, err
+		}
+		decoded := make([]rune, len(data))
+		for index, value := range data {
+			decoded[index] = rune(value)
+		}
+		return strings.NewReader(string(decoded)), nil
+	default:
+		return nil, fmt.Errorf("unsupported POM XML encoding %q", charset)
+	}
 }
 
 func (Handler) ValidateCompleteness(descriptor model.PackageDescriptor) error {

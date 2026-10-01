@@ -94,6 +94,25 @@ func TestBuildPackageDescriptorAllowsPOMOnlyInputWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestBuildPackageDescriptorPOMOnlySupportsISO88591POM(t *testing.T) {
+	directory := t.TempDir()
+	pomPath := filepath.Join(directory, "demo-1.0.0.pom")
+	pom := []byte(`<?xml version="1.0" encoding="ISO-8859-1"?><project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version><description>Caf`)
+	pom = append(pom, 0xe9)
+	pom = append(pom, []byte(`</description></project>`)...)
+	if err := os.WriteFile(pomPath, pom, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	descriptor, err := (maven.Handler{POMOnly: true}).BuildPackageDescriptor(context.Background(), directory)
+	if err != nil {
+		t.Fatalf("BuildPackageDescriptor() error = %v", err)
+	}
+	if descriptor.Namespace != "com.example" || descriptor.Name != "demo" || descriptor.Version != "1.0.0" {
+		t.Fatalf("unexpected coordinate: %+v", descriptor)
+	}
+}
+
 func TestBuildPackageDescriptorPOMOnlyExcludesOtherArtifacts(t *testing.T) {
 	directory := t.TempDir()
 	write(t, filepath.Join(directory, "demo-1.0.0.pom"), `<project><groupId>com.example</groupId><artifactId>demo</artifactId><version>1.0.0</version></project>`)
